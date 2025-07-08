@@ -8,35 +8,58 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Futuristic Dark Theme - Jarvis AI Interface */
+    --background: 220 27% 8%;
+    --foreground: 210 40% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 25% 10%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 25% 10%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Cyan/Blue AI Accent Colors */
+    --primary: 194 100% 60%;
+    --primary-foreground: 220 27% 8%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 20% 15%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 15% 12%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 194 100% 60%;
+    --accent-foreground: 220 27% 8%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 15% 20%;
+    --input: 220 15% 15%;
+    --ring: 194 100% 60%;
 
-    --radius: 0.5rem;
+    /* AI-themed Colors */
+    --ai-glow: 194 100% 60%;
+    --ai-glow-soft: 194 100% 60%;
+    --ai-pulse: 194 80% 50%;
+    --voice-active: 120 100% 50%;
+    --voice-inactive: 215 20% 65%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(194 100% 60%), hsl(220 100% 70%));
+    --gradient-card: linear-gradient(145deg, hsl(220 25% 10%), hsl(220 20% 12%));
+    --gradient-glow: radial-gradient(circle, hsl(194 100% 60% / 0.2), transparent 70%);
+    
+    /* Shadows and Effects */
+    --shadow-glow: 0 0 20px hsl(194 100% 60% / 0.3);
+    --shadow-soft: 0 4px 20px hsl(220 27% 8% / 0.4);
+    --shadow-card: 0 8px 32px hsl(220 27% 8% / 0.6);
+    
+    /* Animation Timings */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: all 0.15s ease-out;
+    
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
 
