@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useConversation } from '@11labs/react';
 import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
@@ -13,12 +13,19 @@ export default function VoiceInterface() {
   const conversation = useConversation();
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [isSessionActive, setIsSessionActive] = useState(false);
+  const isActivatingRef = useRef(false);
   
   // Use ElevenLabs React SDK for reliable speaking detection
   const isCortanaSpeaking = conversation.isSpeaking || false;
 
   // Handle Cortana activation
   const activateCortana = useCallback(async () => {
+    if (isActivatingRef.current || isSessionActive) {
+      console.log('Activation already in progress or session active, skipping...');
+      return;
+    }
+    
+    isActivatingRef.current = true;
     try {
       console.log('Activating Cortana session...');
       setSessionState('processing');
@@ -33,8 +40,10 @@ export default function VoiceInterface() {
     } catch (error) {
       console.error('Failed to activate Cortana session:', error);
       setSessionState('idle');
+    } finally {
+      isActivatingRef.current = false;
     }
-  }, [conversation]);
+  }, [conversation, isSessionActive]);
 
   // Handle session deactivation
   const deactivateCortana = useCallback(async () => {
