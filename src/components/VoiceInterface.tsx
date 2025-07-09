@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useConversation } from '@11labs/react';
 import CortanaHeader from '@/components/CortanaHeader';
 import MessagesPanel from '@/components/MessagesPanel';
 import VoiceControls from '@/components/VoiceControls';
@@ -9,7 +8,6 @@ import { Message } from '@/types/voice';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
 export default function VoiceInterface() {
-  const conversation = useConversation();
   const [isRecording, setIsRecording] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -20,27 +18,26 @@ export default function VoiceInterface() {
     }
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Use ElevenLabs conversation state for speaking detection
-  const isCortanaSpeaking = conversation.isSpeaking || false;
+  const [isCortanaSpeaking, setIsCortanaSpeaking] = useState(false);
 
-  // Initialize ElevenLabs conversation
+  // Listen for ElevenLabs widget events to detect speaking
   useEffect(() => {
-    const initConversation = async () => {
-      try {
-        await conversation.startSession({ 
-          agentId: "agent_01jzp3zn2dek1vk4ztygtxzna6" 
-        });
-      } catch (error) {
-        console.log('ElevenLabs conversation initialization:', error);
+    const handleWidgetEvents = (event: any) => {
+      if (event.data && event.data.type === 'elevenlabs') {
+        switch (event.data.event) {
+          case 'agent_speaking_started':
+            setIsCortanaSpeaking(true);
+            break;
+          case 'agent_speaking_ended':
+          case 'conversation_ended':
+            setIsCortanaSpeaking(false);
+            break;
+        }
       }
     };
-    
-    initConversation();
-    
-    return () => {
-      conversation.endSession();
-    };
+
+    window.addEventListener('message', handleWidgetEvents);
+    return () => window.removeEventListener('message', handleWidgetEvents);
   }, []);
 
   const handleStartRecording = async () => {
