@@ -87,9 +87,16 @@ export default function VoiceInterface() {
         </div>
       </div>
 
-      <div className="flex-1 flex">
-        {/* Messages Panel - Left Side */}
-        <div className="w-1/3 border-r border-border">
+      {/* Full Background Cortana Image */}
+      <div 
+        className="flex-1 relative bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${cortanaAI})` }}
+      >
+        <div className="absolute inset-0 bg-gradient-glow opacity-30 animate-pulse-glow"></div>
+        <div className="absolute inset-0 bg-background/20"></div>
+        
+        {/* Messages Panel - Left Side Overlay */}
+        <div className="absolute left-4 top-4 bottom-4 w-80 bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card">
           <div className="h-full overflow-y-auto p-4 space-y-4">
             <h2 className="text-lg font-semibold text-foreground mb-4">Conversation</h2>
             {messages.map((message) => (
@@ -134,41 +141,10 @@ export default function VoiceInterface() {
           </div>
         </div>
 
-        {/* Central Cortana Display */}
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="relative">
-            <div className="relative z-10">
-              <img 
-                src={cortanaAI} 
-                alt="Cortana AI Interface"
-                className="w-96 h-56 object-cover rounded-2xl shadow-card border border-border"
-              />
-              <div className="absolute inset-0 bg-gradient-glow rounded-2xl animate-pulse-glow"></div>
-            </div>
-            
-            {/* Status Indicator */}
-            <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2">
-              <div className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-300 ${
-                isRecording 
-                  ? 'bg-voice-active border-voice-active text-background animate-recording-pulse' 
-                  : isProcessing 
-                  ? 'bg-ai-pulse border-ai-pulse text-background animate-pulse' 
-                  : 'bg-secondary border-border text-foreground'
-              }`}>
-                {isRecording ? 'Listening...' : 
-                 isProcessing ? 'Processing...' : 
-                 'Ready'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Controls Panel - Right Side */}
-        <div className="w-1/3 border-l border-border">
-          <div className="h-full flex flex-col p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-6">Voice Controls</h2>
-            
-            <div className="flex-1 flex items-center justify-center">
+        {/* Voice Controls - Lower Right */}
+        <div className="absolute bottom-4 right-4">
+          <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-6">
+            <div className="flex flex-col items-center space-y-4">
               <Button
                 onClick={isRecording ? handleStopRecording : handleStartRecording}
                 disabled={isProcessing}
@@ -184,15 +160,30 @@ export default function VoiceInterface() {
                   <Mic className="w-8 h-8" />
                 )}
               </Button>
+              
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  {isRecording ? 'Recording...' : 
+                   isProcessing ? 'Processing...' : 
+                   'Click to start'}
+                </p>
+              </div>
             </div>
-            
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">
-                {isRecording ? 'Recording... Click to stop' : 
-                 isProcessing ? 'Processing your request...' : 
-                 'Click to start recording'}
-              </p>
-            </div>
+          </div>
+        </div>
+
+        {/* Status Indicator - Center */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+          <div className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-300 bg-gradient-card/95 backdrop-blur-sm ${
+            isRecording 
+              ? 'border-voice-active text-voice-active animate-recording-pulse' 
+              : isProcessing 
+              ? 'border-ai-pulse text-ai-pulse animate-pulse' 
+              : 'border-border text-foreground'
+          }`}>
+            {isRecording ? 'Listening...' : 
+             isProcessing ? 'Processing...' : 
+             'Ready'}
           </div>
         </div>
       </div>
