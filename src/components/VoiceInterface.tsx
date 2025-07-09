@@ -49,7 +49,7 @@ export default function VoiceInterface() {
   }, [conversation]);
 
   // Wake word detection
-  const { isListening: isWakeWordListening } = useWakeWord({
+  const { isListening: isWakeWordListening, hasPermission, error, requestPermission } = useWakeWord({
     onWakeWordDetected: activateCortana,
     isEnabled: !isSessionActive
   });
@@ -77,6 +77,10 @@ export default function VoiceInterface() {
 
   // Get status text based on current state
   const getStatusText = () => {
+    if (error) return 'Microphone Error';
+    if (hasPermission === false) return 'Microphone Blocked';
+    if (hasPermission === null) return 'Requesting Permission...';
+    
     switch (sessionState) {
       case 'listening': return 'Listening...';
       case 'processing': return 'Activating...';
