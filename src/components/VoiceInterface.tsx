@@ -22,7 +22,26 @@ export default function VoiceInterface() {
   const [isProcessing, setIsProcessing] = useState(false);
   
   // Use ElevenLabs conversation state for speaking detection
-  const isCortanaSpeaking = conversation.isSpeaking;
+  const isCortanaSpeaking = conversation.isSpeaking || false;
+
+  // Initialize ElevenLabs conversation
+  useEffect(() => {
+    const initConversation = async () => {
+      try {
+        await conversation.startSession({ 
+          agentId: "agent_01jzp3zn2dek1vk4ztygtxzna6" 
+        });
+      } catch (error) {
+        console.log('ElevenLabs conversation initialization:', error);
+      }
+    };
+    
+    initConversation();
+    
+    return () => {
+      conversation.endSession();
+    };
+  }, []);
 
   const handleStartRecording = async () => {
     try {
@@ -80,19 +99,32 @@ export default function VoiceInterface() {
         <div className="absolute inset-0 bg-gradient-glow opacity-30 animate-pulse-glow"></div>
         <div className="absolute inset-0 bg-background/20"></div>
         
-        {/* Ghost Holographic Overlay when Speaking */}
+        {/* Holographic Cortana Overlay when Speaking */}
         <div 
           className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000 ${
             isCortanaSpeaking 
-              ? 'opacity-40 scale-105 animate-pulse-glow' 
+              ? 'opacity-60 scale-105 animate-pulse-glow' 
               : 'opacity-0 scale-100'
           }`}
           style={{ 
-            backgroundImage: `url(/lovable-uploads/0076c8d2-07c1-49b9-b0d8-c4b419c214bd.png)`,
+            backgroundImage: `url(/lovable-uploads/48c7a359-5a9a-4f2f-bb1c-71e5282e9b4b.png)`,
             mixBlendMode: 'screen',
-            filter: 'hue-rotate(180deg) brightness(1.2) contrast(1.1)'
+            filter: 'brightness(1.3) contrast(1.2) saturate(1.1)'
           }}
         />
+        
+        {/* Synthesized Halo Effect */}
+        <div 
+          className={`absolute inset-0 flex items-center justify-center transition-all duration-1000 ${
+            isCortanaSpeaking ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <div className="relative">
+            <div className="w-32 h-32 rounded-full bg-ai-glow/30 animate-ping" />
+            <div className="absolute inset-0 w-32 h-32 rounded-full bg-gradient-to-r from-ai-glow/20 to-transparent animate-spin" />
+            <div className="absolute inset-2 w-28 h-28 rounded-full border-2 border-ai-glow/40 animate-pulse" />
+          </div>
+        </div>
         
         {/* Glowing Ring Effect */}
         <GlowingRing isActive={isCortanaSpeaking} size={300} />
