@@ -96,7 +96,7 @@ export default function VoiceInterface() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col min-h-screen max-h-screen overflow-hidden bg-background">
       <CortanaHeader />
 
       {/* Full Background Cortana Image */}

@@ -44,6 +44,26 @@ export function useWakeWord({ onWakeWordDetected, isEnabled }: UseWakeWordProps)
 
     recognition.onerror = (event) => {
       console.error('Wake word recognition error:', event.error);
+      // Don't restart automatically on errors to prevent infinite loops
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('Speech recognition ended');
+      // Auto-restart if still enabled and not manually stopped
+      if (isEnabled && recognitionRef.current) {
+        setTimeout(() => {
+          if (isEnabled && recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+              setIsListening(true);
+              console.log('Auto-restarting wake word detection...');
+            } catch (error) {
+              console.error('Failed to auto-restart wake word detection:', error);
+            }
+          }
+        }, 1000); // Wait 1 second before restarting
+      }
     };
 
     recognitionRef.current = recognition;
