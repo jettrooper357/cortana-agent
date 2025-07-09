@@ -1,97 +1,98 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useConversation } from '@11labs/react';
 import CortanaHeader from '@/components/CortanaHeader';
-import MessagesPanel from '@/components/MessagesPanel';
-import VoiceControls from '@/components/VoiceControls';
-import StatusIndicator from '@/components/StatusIndicator';
 import GlowingRing from '@/components/GlowingRing';
-import { Message } from '@/types/voice';
+import { useWakeWord } from '@/hooks/useWakeWord';
+import { Button } from '@/components/ui/button';
+import { Mic, MicOff } from 'lucide-react';
 import cortanaAI from '@/assets/cortana-ai.jpg';
+
+type SessionState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export default function VoiceInterface() {
   const conversation = useConversation();
-  const [isRecording, setIsRecording] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: 'Hello! I am Cortana, your AI assistant. How can I help you today?',
-      type: 'jarvis',
-      timestamp: new Date()
-    }
-  ]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [sessionState, setSessionState] = useState<SessionState>('idle');
+  const [isSessionActive, setIsSessionActive] = useState(false);
   
   // Use ElevenLabs React SDK for reliable speaking detection
   const isCortanaSpeaking = conversation.isSpeaking || false;
 
-  // Initialize ElevenLabs conversation
-  useEffect(() => {
-    const initConversation = async () => {
-      try {
-        console.log('Initializing ElevenLabs conversation...');
-        await conversation.startSession({ 
-          agentId: "agent_01jzp3zn2dek1vk4ztygtxzna6" 
-        });
-        console.log('ElevenLabs conversation initialized successfully');
-      } catch (error) {
-        console.error('Failed to initialize ElevenLabs conversation:', error);
-      }
-    };
-    
-    initConversation();
-    
-    return () => {
-      conversation.endSession();
-    };
-  }, []);
-
-  // Debug logging for speaking state
-  useEffect(() => {
-    console.log('Cortana speaking state changed:', isCortanaSpeaking);
-  }, [isCortanaSpeaking]);
-
-  const handleStartRecording = async () => {
+  // Handle Cortana activation
+  const activateCortana = useCallback(async () => {
     try {
-      // Request microphone access
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      setIsRecording(true);
+      console.log('Activating Cortana session...');
+      setSessionState('processing');
       
-      // TODO: Implement actual voice recording with ElevenLabs
-      console.log('Recording started...');
+      await conversation.startSession({ 
+        agentId: "agent_01jzp3zn2dek1vk4ztygtxzna6" 
+      });
       
-      // Simulate recording for now
-      setTimeout(() => {
-        handleStopRecording();
-      }, 3000);
+      setIsSessionActive(true);
+      setSessionState('listening');
+      console.log('Cortana session activated successfully');
     } catch (error) {
-      console.error('Error accessing microphone:', error);
+      console.error('Failed to activate Cortana session:', error);
+      setSessionState('idle');
+    }
+  }, [conversation]);
+
+  // Handle session deactivation
+  const deactivateCortana = useCallback(async () => {
+    try {
+      await conversation.endSession();
+      setIsSessionActive(false);
+      setSessionState('idle');
+      console.log('Cortana session deactivated');
+    } catch (error) {
+      console.error('Failed to deactivate Cortana session:', error);
+    }
+  }, [conversation]);
+
+  // Wake word detection
+  const { isListening: isWakeWordListening } = useWakeWord({
+    onWakeWordDetected: activateCortana,
+    isEnabled: !isSessionActive
+  });
+
+  // Update session state based on speaking
+  useEffect(() => {
+    if (isCortanaSpeaking && isSessionActive) {
+      setSessionState('speaking');
+    } else if (isSessionActive && !isCortanaSpeaking) {
+      setSessionState('listening');
+    }
+  }, [isCortanaSpeaking, isSessionActive]);
+
+  // Session timeout (auto-deactivate after 30 seconds of inactivity)
+  useEffect(() => {
+    if (!isSessionActive || sessionState === 'speaking') return;
+    
+    const timeout = setTimeout(() => {
+      console.log('Session timeout - deactivating Cortana');
+      deactivateCortana();
+    }, 30000);
+    
+    return () => clearTimeout(timeout);
+  }, [sessionState, isSessionActive, deactivateCortana]);
+
+  // Get status text based on current state
+  const getStatusText = () => {
+    switch (sessionState) {
+      case 'listening': return 'Listening...';
+      case 'processing': return 'Activating...';
+      case 'speaking': return 'Speaking...';
+      default: return isWakeWordListening ? 'Say "Hey Cortana"' : 'Ready';
     }
   };
 
-  const handleStopRecording = () => {
-    setIsRecording(false);
-    setIsProcessing(true);
-    
-    // TODO: Process recording and send to webhook
-    // For now, simulate a response
-    setTimeout(() => {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        content: 'This is a simulated transcription of your voice input.',
-        type: 'user',
-        timestamp: new Date()
-      };
-      
-      const jarvisResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: 'I received your message and I am processing it. This is a simulated response from the webhook.',
-        type: 'jarvis',
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, userMessage, jarvisResponse]);
-      setIsProcessing(false);
-    }, 2000);
+  // Get status color based on current state
+  const getStatusColor = () => {
+    switch (sessionState) {
+      case 'listening': return 'text-ai-glow border-ai-glow';
+      case 'processing': return 'text-ai-pulse border-ai-pulse animate-pulse';
+      case 'speaking': return 'text-voice-active border-voice-active';
+      default: return 'text-muted-foreground border-border';
+    }
   };
 
   return (
@@ -109,7 +110,7 @@ export default function VoiceInterface() {
         {/* Enhanced Holographic Cortana Overlay when Speaking */}
         <div 
           className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-out ${
-            isCortanaSpeaking 
+            sessionState === 'speaking'
               ? 'opacity-80 scale-110 animate-pulse-glow' 
               : 'opacity-0 scale-95'
           }`}
@@ -123,7 +124,7 @@ export default function VoiceInterface() {
         {/* Multi-layered Synthesized Halo Effects */}
         <div 
           className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
-            isCortanaSpeaking ? 'opacity-100' : 'opacity-0'
+            sessionState === 'speaking' ? 'opacity-100' : 'opacity-0'
           }`}
         >
           {/* Outer energy ring */}
@@ -147,15 +148,42 @@ export default function VoiceInterface() {
         </div>
         
         {/* Glowing Ring Effect */}
-        <GlowingRing isActive={isCortanaSpeaking} size={300} />
+        <GlowingRing isActive={sessionState === 'speaking'} size={300} />
         
-        {/* ElevenLabs Conversational AI Widget */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div 
-            dangerouslySetInnerHTML={{
-              __html: '<elevenlabs-convai agent-id="agent_01jzp3zn2dek1vk4ztygtxzna6"></elevenlabs-convai>'
-            }}
-          />
+        {/* Status Indicator */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+          <div className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-300 bg-gradient-card/95 backdrop-blur-sm ${getStatusColor()}`}>
+            {getStatusText()}
+          </div>
+        </div>
+        
+        {/* Manual Activation Button */}
+        <div className="absolute bottom-4 right-4">
+          <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-6">
+            <div className="flex flex-col items-center space-y-4">
+              <Button
+                onClick={isSessionActive ? deactivateCortana : activateCortana}
+                disabled={sessionState === 'processing'}
+                className={`w-20 h-20 rounded-full border-2 transition-all duration-300 ${
+                  isSessionActive
+                    ? 'bg-voice-active border-voice-active hover:bg-voice-active/80' 
+                    : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
+                }`}
+              >
+                {isSessionActive ? (
+                  <MicOff className="w-8 h-8" />
+                ) : (
+                  <Mic className="w-8 h-8" />
+                )}
+              </Button>
+              
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  {isSessionActive ? 'End Session' : 'Activate Cortana'}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
