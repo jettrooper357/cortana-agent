@@ -15,6 +15,7 @@ declare global {
 export function useWakeWord({ onWakeWordDetected, isEnabled }: UseWakeWordProps) {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -35,9 +36,14 @@ export function useWakeWord({ onWakeWordDetected, isEnabled }: UseWakeWordProps)
         const transcript = lastResult[0].transcript.toLowerCase().trim();
         console.log('Wake word detection heard:', transcript);
         
-        if (transcript.includes('hey cortana') || transcript.includes('cortana')) {
+        if ((transcript.includes('hey cortana') || transcript.includes('cortana')) && !isProcessingRef.current) {
           console.log('Wake word detected!');
+          isProcessingRef.current = true;
           onWakeWordDetected();
+          // Reset processing flag after a delay to prevent rapid triggers
+          setTimeout(() => {
+            isProcessingRef.current = false;
+          }, 3000);
         }
       }
     };
