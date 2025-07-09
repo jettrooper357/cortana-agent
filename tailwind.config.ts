@@ -134,6 +134,30 @@ export default {
 						transform: 'scale(1.1)',
 						opacity: '0.8'
 					}
+				},
+				'pulse-ring': {
+					'0%': {
+						transform: 'scale(0.8)',
+						opacity: '1'
+					},
+					'50%': {
+						transform: 'scale(1.2)',
+						opacity: '0.5'
+					},
+					'100%': {
+						transform: 'scale(0.8)',
+						opacity: '1'
+					}
+				},
+				'core-pulse': {
+					'0%, 100%': {
+						transform: 'scale(1)',
+						opacity: '0.2'
+					},
+					'50%': {
+						transform: 'scale(1.5)',
+						opacity: '0.4'
+					}
 				}
 			},
 			animation: {
@@ -141,7 +165,9 @@ export default {
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
 				'fade-in-up': 'fade-in-up 0.5s ease-out',
-				'recording-pulse': 'recording-pulse 1s ease-in-out infinite'
+				'recording-pulse': 'recording-pulse 1s ease-in-out infinite',
+				'pulse-ring': 'pulse-ring 2s ease-in-out infinite',
+				'core-pulse': 'core-pulse 1.5s ease-in-out infinite'
 			}
 		}
 	},

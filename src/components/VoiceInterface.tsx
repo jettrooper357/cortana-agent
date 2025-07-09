@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Mic, MicOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import GlowingRing from '@/components/GlowingRing';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
 interface Message {
@@ -22,6 +23,7 @@ export default function VoiceInterface() {
     }
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCortanaSpeaking, setIsCortanaSpeaking] = useState(false);
 
   const handleStartRecording = async () => {
     try {
@@ -64,6 +66,12 @@ export default function VoiceInterface() {
       
       setMessages(prev => [...prev, userMessage, jarvisResponse]);
       setIsProcessing(false);
+      
+      // Simulate Cortana speaking
+      setIsCortanaSpeaking(true);
+      setTimeout(() => {
+        setIsCortanaSpeaking(false);
+      }, 3000);
     }, 2000);
   };
 
@@ -94,6 +102,9 @@ export default function VoiceInterface() {
       >
         <div className="absolute inset-0 bg-gradient-glow opacity-30 animate-pulse-glow"></div>
         <div className="absolute inset-0 bg-background/20"></div>
+        
+        {/* Glowing Ring Effect */}
+        <GlowingRing isActive={isCortanaSpeaking} size={300} />
         
         {/* Messages Panel - Left Side Overlay */}
         <div className="absolute left-4 top-4 bottom-4 w-80 bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card">
