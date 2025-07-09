@@ -90,7 +90,7 @@ export default function VoiceInterface() {
               : 'opacity-0 scale-100'
           }`}
           style={{ 
-            backgroundImage: `url(/lovable-uploads/2f42001b-6c0e-49c0-8b80-700863c76ac8.png)`,
+            backgroundImage: `url(/lovable-uploads/0076c8d2-07c1-49b9-b0d8-c4b419c214bd.png)`,
             mixBlendMode: 'screen',
             filter: 'hue-rotate(180deg) brightness(1.2) contrast(1.1)'
           }}
