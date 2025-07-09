@@ -99,16 +99,14 @@ export default function VoiceInterface() {
         {/* Glowing Ring Effect */}
         <GlowingRing isActive={isCortanaSpeaking} size={300} />
         
-        <MessagesPanel messages={messages} isProcessing={isProcessing} />
-        
-        <VoiceControls 
-          isRecording={isRecording}
-          isProcessing={isProcessing}
-          onStartRecording={handleStartRecording}
-          onStopRecording={handleStopRecording}
-        />
-
-        <StatusIndicator isRecording={isRecording} isProcessing={isProcessing} />
+        {/* ElevenLabs Conversational AI Widget */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div 
+            dangerouslySetInnerHTML={{
+              __html: '<elevenlabs-convai agent-id="agent_01jzp3zn2dek1vk4ztygtxzna6"></elevenlabs-convai>'
+            }}
+          />
+        </div>
       </div>
     </div>
   );
