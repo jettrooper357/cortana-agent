@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useConversation } from '@11labs/react';
 import CortanaHeader from '@/components/CortanaHeader';
 import MessagesPanel from '@/components/MessagesPanel';
 import VoiceControls from '@/components/VoiceControls';
@@ -8,6 +9,7 @@ import { Message } from '@/types/voice';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
 export default function VoiceInterface() {
+  const conversation = useConversation();
   const [isRecording, setIsRecording] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -18,7 +20,9 @@ export default function VoiceInterface() {
     }
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isCortanaSpeaking, setIsCortanaSpeaking] = useState(false);
+  
+  // Use ElevenLabs conversation state for speaking detection
+  const isCortanaSpeaking = conversation.isSpeaking;
 
   const handleStartRecording = async () => {
     try {
@@ -61,12 +65,6 @@ export default function VoiceInterface() {
       
       setMessages(prev => [...prev, userMessage, jarvisResponse]);
       setIsProcessing(false);
-      
-      // Simulate Cortana speaking
-      setIsCortanaSpeaking(true);
-      setTimeout(() => {
-        setIsCortanaSpeaking(false);
-      }, 3000);
     }, 2000);
   };
 
