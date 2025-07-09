@@ -82,6 +82,20 @@ export default function VoiceInterface() {
         <div className="absolute inset-0 bg-gradient-glow opacity-30 animate-pulse-glow"></div>
         <div className="absolute inset-0 bg-background/20"></div>
         
+        {/* Ghost Holographic Overlay when Speaking */}
+        <div 
+          className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000 ${
+            isCortanaSpeaking 
+              ? 'opacity-40 scale-105 animate-pulse-glow' 
+              : 'opacity-0 scale-100'
+          }`}
+          style={{ 
+            backgroundImage: `url(/lovable-uploads/2f42001b-6c0e-49c0-8b80-700863c76ac8.png)`,
+            mixBlendMode: 'screen',
+            filter: 'hue-rotate(180deg) brightness(1.2) contrast(1.1)'
+          }}
+        />
+        
         {/* Glowing Ring Effect */}
         <GlowingRing isActive={isCortanaSpeaking} size={300} />
         
