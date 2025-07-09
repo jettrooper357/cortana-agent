@@ -81,7 +81,7 @@ export default function VoiceInterface() {
       case 'listening': return 'Listening...';
       case 'processing': return 'Activating...';
       case 'speaking': return 'Speaking...';
-      default: return isWakeWordListening ? 'Say "Hey Cortana"' : 'Ready';
+      default: return 'Ready';
     }
   };
 
