@@ -3,14 +3,18 @@ import { useConversation } from '@11labs/react';
 import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
 import { useWakeWord } from '@/hooks/useWakeWord';
+import { useSettings } from '@/hooks/useSettings';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, MicOff, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
 type SessionState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export default function VoiceInterface() {
   const conversation = useConversation();
+  const navigate = useNavigate();
+  const { getActiveWebhook } = useSettings();
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [isSessionActive, setIsSessionActive] = useState(false);
   const isActivatingRef = useRef(false);
@@ -25,13 +29,20 @@ export default function VoiceInterface() {
       return;
     }
     
+    const activeWebhook = getActiveWebhook();
+    if (!activeWebhook || !activeWebhook.agentId) {
+      console.error('No active webhook or agent ID configured');
+      navigate('/settings');
+      return;
+    }
+    
     isActivatingRef.current = true;
     try {
       console.log('Activating Cortana session...');
       setSessionState('processing');
       
       await conversation.startSession({ 
-        agentId: "agent_01jzp3zn2dek1vk4ztygtxzna6" 
+        agentId: activeWebhook.agentId 
       });
       
       setIsSessionActive(true);
@@ -43,7 +54,7 @@ export default function VoiceInterface() {
     } finally {
       isActivatingRef.current = false;
     }
-  }, [conversation, isSessionActive]);
+  }, [conversation, isSessionActive, getActiveWebhook, navigate]);
 
   // Handle session deactivation
   const deactivateCortana = useCallback(async () => {
@@ -193,6 +204,18 @@ export default function VoiceInterface() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Settings Button */}
+        <div className="absolute bottom-4 left-4">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate('/settings')}
+            className="bg-gradient-card/95 backdrop-blur-sm border-border hover:border-ai-glow hover:shadow-glow"
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
         </div>
       </div>
     </div>
