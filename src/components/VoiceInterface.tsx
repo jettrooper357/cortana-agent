@@ -29,16 +29,35 @@ export default function VoiceInterface() {
       return;
     }
     
+    console.log('=== CORTANA ACTIVATION DEBUG ===');
     const activeWebhook = getActiveWebhook();
-    if (!activeWebhook || !activeWebhook.agentId) {
-      console.error('No active webhook or agent ID configured');
+    console.log('Active webhook:', activeWebhook);
+    
+    if (!activeWebhook) {
+      console.error('❌ No active webhook found - redirecting to settings');
       navigate('/settings');
       return;
     }
     
+    if (!activeWebhook.agentId) {
+      console.error('❌ Active webhook missing Agent ID:', activeWebhook);
+      console.error('Agent ID value:', activeWebhook.agentId);
+      navigate('/settings');
+      return;
+    }
+    
+    if (activeWebhook.type === 'elevenlabs' && !activeWebhook.apiKey) {
+      console.error('❌ ElevenLabs webhook missing API key');
+      navigate('/settings');
+      return;
+    }
+    
+    console.log('✅ Webhook validation passed - proceeding with activation');
+    console.log('Using Agent ID:', activeWebhook.agentId);
+    
     isActivatingRef.current = true;
     try {
-      console.log('Activating Cortana session...');
+      console.log('🚀 Starting Cortana session...');
       setSessionState('processing');
       
       await conversation.startSession({ 
@@ -47,9 +66,9 @@ export default function VoiceInterface() {
       
       setIsSessionActive(true);
       setSessionState('listening');
-      console.log('Cortana session activated successfully');
+      console.log('✅ Cortana session activated successfully');
     } catch (error) {
-      console.error('Failed to activate Cortana session:', error);
+      console.error('❌ Failed to activate Cortana session:', error);
       setSessionState('idle');
     } finally {
       isActivatingRef.current = false;

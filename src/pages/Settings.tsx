@@ -46,6 +46,34 @@ export default function Settings() {
 
   const handleSubmit = (data: WebhookFormData) => {
     try {
+      // Enhanced validation
+      if (data.type === 'elevenlabs' && !data.agentId?.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Agent ID is required for ElevenLabs webhooks",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (data.type === 'openai' && !data.agentId?.trim()) {
+        toast({
+          title: "Validation Error", 
+          description: "Agent ID is required for OpenAI webhooks",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (data.type === 'custom' && !data.webhookUrl?.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Webhook URL is required for custom webhooks", 
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const webhook: WebhookSettings = {
         id: isEditing || crypto.randomUUID(),
         name: data.name,
@@ -56,6 +84,7 @@ export default function Settings() {
         isActive: data.isActive
       };
       
+      console.log('Saving webhook:', webhook);
       saveWebhook(webhook);
       
       toast({
@@ -66,6 +95,7 @@ export default function Settings() {
       setIsEditing(null);
       form.reset();
     } catch (error) {
+      console.error('Error saving webhook:', error);
       toast({
         title: 'Error',
         description: 'Failed to save webhook. Please try again.',
