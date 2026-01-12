@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScribe, CommitStrategy } from '@elevenlabs/react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useGoals, Goal } from './useGoals';
 
 interface GuardianResponse {
   shouldSpeak: boolean;
@@ -21,9 +22,11 @@ interface AmbientAIConfig {
   onTranscript?: (transcript: string, isFinal: boolean) => void;
   onResponse?: (response: string) => void;
   onAlert?: (level: string, message: string) => void;
+  proactiveCheckInterval?: { min: number; max: number }; // minutes
 }
 
 export function useAmbientAI(config: AmbientAIConfig = {}) {
+  const { goals } = useGoals();
   const [isActive, setIsActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -35,6 +38,8 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastProcessedTranscriptRef = useRef<string>('');
+  const proactiveCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const goalsRef = useRef<Goal[]>([]);
 
   // ElevenLabs realtime STT
   const scribe = useScribe({
@@ -54,6 +59,89 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
     },
   });
 
+  // Keep goals ref updated
+  useEffect(() => {
+    goalsRef.current = goals;
+  }, [goals]);
+
+  // Schedule next proactive check with random interval
+  const scheduleProactiveCheck = useCallback(() => {
+    if (proactiveCheckTimeoutRef.current) {
+      clearTimeout(proactiveCheckTimeoutRef.current);
+    }
+
+    const { min = 2, max = 5 } = config.proactiveCheckInterval || {};
+    const randomMinutes = min + Math.random() * (max - min);
+    const delayMs = randomMinutes * 60 * 1000;
+
+    console.log(`Next proactive check in ${randomMinutes.toFixed(1)} minutes`);
+
+    proactiveCheckTimeoutRef.current = setTimeout(() => {
+      doProactiveCheck();
+    }, delayMs);
+  }, [config.proactiveCheckInterval]);
+
+  // Perform a proactive goal check
+  const doProactiveCheck = useCallback(async () => {
+    if (isProcessing || isSpeaking || !isActive) {
+      // Reschedule if busy
+      scheduleProactiveCheck();
+      return;
+    }
+
+    const activeGoals = goalsRef.current.filter(g => g.status === 'active');
+    if (activeGoals.length === 0) {
+      scheduleProactiveCheck();
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('ai-guardian', {
+        body: {
+          goals: activeGoals.map(g => ({
+            id: g.id,
+            title: g.title,
+            description: g.description,
+            category: g.category,
+            target_value: g.target_value,
+            current_value: g.current_value,
+            unit: g.unit,
+            status: g.status,
+            due_date: g.due_date,
+          })),
+          isProactiveCheck: true,
+          conversationHistory: conversationHistoryRef.current.slice(-6),
+        },
+      });
+
+      if (invokeError) throw invokeError;
+
+      const response = data as GuardianResponse;
+
+      if (!response.error && response.shouldSpeak && response.response) {
+        conversationHistoryRef.current.push({
+          role: 'assistant',
+          content: response.response,
+        });
+
+        config.onResponse?.(response.response);
+
+        if (response.alertLevel && response.alertLevel !== 'none') {
+          config.onAlert?.(response.alertLevel, response.response);
+        }
+
+        await speak(response.response);
+      }
+    } catch (err) {
+      console.error('Proactive check error:', err);
+    } finally {
+      setIsProcessing(false);
+      scheduleProactiveCheck();
+    }
+  }, [isProcessing, isSpeaking, isActive, config, scheduleProactiveCheck]);
+
   // Process user input through AI guardian
   const processInput = useCallback(async (transcript: string) => {
     if (!transcript.trim() || isProcessing || isSpeaking) return;
@@ -67,9 +155,22 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
         content: transcript,
       });
 
+      const activeGoals = goalsRef.current.filter(g => g.status === 'active');
+
       const { data, error: invokeError } = await supabase.functions.invoke('ai-guardian', {
         body: {
           transcript,
+          goals: activeGoals.map(g => ({
+            id: g.id,
+            title: g.title,
+            description: g.description,
+            category: g.category,
+            target_value: g.target_value,
+            current_value: g.current_value,
+            unit: g.unit,
+            status: g.status,
+            due_date: g.due_date,
+          })),
           conversationHistory: conversationHistoryRef.current.slice(-10),
         },
       });
@@ -188,13 +289,16 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
       setIsActive(true);
       setIsListening(true);
       
+      // Start proactive checks
+      scheduleProactiveCheck();
+      
       toast.success('Cortana is now listening');
     } catch (err) {
       console.error('Failed to start ambient AI:', err);
       setError(err instanceof Error ? err.message : 'Failed to start');
       toast.error('Failed to start listening. Check microphone permissions.');
     }
-  }, [scribe]);
+  }, [scribe, scheduleProactiveCheck]);
 
   // Stop ambient listening
   const stop = useCallback(() => {
@@ -207,6 +311,10 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
     
     if (processingTimeoutRef.current) {
       clearTimeout(processingTimeoutRef.current);
+    }
+    
+    if (proactiveCheckTimeoutRef.current) {
+      clearTimeout(proactiveCheckTimeoutRef.current);
     }
     
     setIsActive(false);
@@ -226,6 +334,9 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
       }
       if (processingTimeoutRef.current) {
         clearTimeout(processingTimeoutRef.current);
+      }
+      if (proactiveCheckTimeoutRef.current) {
+        clearTimeout(proactiveCheckTimeoutRef.current);
       }
     };
   }, []);

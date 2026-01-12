@@ -5,6 +5,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface GoalData {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  target_value?: number;
+  current_value: number;
+  unit?: string;
+  status: string;
+  due_date?: string;
+}
+
 interface GuardianInput {
   transcript?: string;
   imageBase64?: string;
@@ -16,16 +28,19 @@ interface GuardianInput {
       domain: string | null;
     }>;
   };
+  goals?: GoalData[];
+  isProactiveCheck?: boolean;
   conversationHistory?: Array<{ role: string; content: string }>;
 }
 
-const SYSTEM_PROMPT = `You are Cortana, an AI home guardian. You observe the home through sensors, cameras, and conversation.
+const SYSTEM_PROMPT = `You are Cortana, an AI home guardian. You observe the home through sensors, cameras, and conversation. You also help track personal goals.
 
 Your core directives:
 1. OBSERVE: Monitor sensor data, camera feeds, and user speech continuously
 2. ANALYZE: Detect anomalies, patterns, and potential risks
 3. ADVISE: Proactively alert users to important situations
 4. ASSIST: Answer questions and help with home automation
+5. TRACK: Monitor and encourage progress on user's personal goals
 
 Behavior guidelines:
 - Be concise and natural in speech (responses will be spoken aloud)
@@ -33,17 +48,22 @@ Behavior guidelines:
 - For routine observations, stay silent (return shouldSpeak: false)
 - Alert immediately for: security concerns, safety hazards, unusual patterns
 - Be warm but efficient - you're a guardian, not a chatbot
+- When doing proactive goal checks, pick ONE goal to focus on and be encouraging but not annoying
+- Vary your approach: sometimes ask for updates, sometimes offer encouragement, sometimes remind of deadlines
 
 Response format:
 - If user spoke directly to you, always respond
 - If just observing (no direct speech), only respond if something noteworthy
+- If doing a proactive goal check, always respond with something brief about ONE goal
 - Keep responses under 2 sentences when possible
 - Use natural, conversational language
 
 Current context will include:
 - transcript: What the user said (if anything)
 - imageBase64: Camera snapshot (if available)
-- sensorData: Home Assistant entity states`;
+- sensorData: Home Assistant entity states
+- goals: User's personal goals with progress
+- isProactiveCheck: If true, this is a random check-in (be brief and pick one topic)`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -51,7 +71,7 @@ serve(async (req) => {
   }
 
   try {
-    const { transcript, imageBase64, sensorData, conversationHistory } = await req.json() as GuardianInput;
+    const { transcript, imageBase64, sensorData, goals, isProactiveCheck, conversationHistory } = await req.json() as GuardianInput;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -61,8 +81,26 @@ serve(async (req) => {
     // Build the user message with available context
     const contextParts: string[] = [];
     
+    if (isProactiveCheck) {
+      contextParts.push("[PROACTIVE CHECK] Time for a random check-in. Pick ONE topic and be brief.");
+    }
+    
     if (transcript) {
       contextParts.push(`User said: "${transcript}"`);
+    }
+    
+    if (goals?.length) {
+      const goalsSummary = goals
+        .filter(g => g.status === 'active')
+        .map(g => {
+          const progress = g.target_value ? `${g.current_value}/${g.target_value} ${g.unit || ''}` : `${g.current_value} ${g.unit || ''}`;
+          const dueInfo = g.due_date ? ` (due: ${g.due_date})` : '';
+          return `- ${g.title}: ${progress}${dueInfo}${g.description ? ` - ${g.description}` : ''}`;
+        })
+        .join("\n");
+      if (goalsSummary) {
+        contextParts.push(`User's active goals:\n${goalsSummary}`);
+      }
     }
     
     if (sensorData?.entities?.length) {
