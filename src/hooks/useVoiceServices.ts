@@ -45,7 +45,10 @@ const DEFAULT_CONFIG: VoiceServicesConfig = {
 };
 
 export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
-  const fullConfig = { ...DEFAULT_CONFIG, ...config };
+  // Use refs to always have current config values in callbacks
+  const ttsProvider = config.ttsProvider ?? 'browser';
+  const sttProvider = config.sttProvider ?? 'browser';
+  const elevenLabsVoiceId = config.elevenLabsVoiceId;
   
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -161,8 +164,8 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
     setError(null);
     
     try {
-      if (fullConfig.ttsProvider === 'elevenlabs') {
-        await speakWithElevenLabs(text, fullConfig.elevenLabsVoiceId);
+      if (ttsProvider === 'elevenlabs') {
+        await speakWithElevenLabs(text, elevenLabsVoiceId);
       } else {
         await speakWithBrowser(text);
       }
@@ -171,7 +174,7 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
       setError(errorMsg);
       
       // Fallback to browser if ElevenLabs fails
-      if (fullConfig.ttsProvider === 'elevenlabs') {
+      if (ttsProvider === 'elevenlabs') {
         console.warn('ElevenLabs TTS failed, falling back to browser:', err);
         try {
           await speakWithBrowser(text);
@@ -180,7 +183,7 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
         }
       }
     }
-  }, [fullConfig.ttsProvider, fullConfig.elevenLabsVoiceId, speakWithBrowser, speakWithElevenLabs]);
+  }, [ttsProvider, elevenLabsVoiceId, speakWithBrowser, speakWithElevenLabs]);
 
   // Stop speaking
   const stopSpeaking = useCallback(() => {
@@ -285,7 +288,7 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
     setInterimTranscript('');
     
     try {
-      if (fullConfig.sttProvider === 'elevenlabs') {
+      if (sttProvider === 'elevenlabs') {
         await startElevenLabsListening(onTranscript);
       } else {
         await startBrowserListening(onTranscript);
@@ -296,7 +299,7 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
       toast.error(errorMsg);
       throw err;
     }
-  }, [fullConfig.sttProvider, startBrowserListening, startElevenLabsListening]);
+  }, [sttProvider, startBrowserListening, startElevenLabsListening]);
 
   // Stop listening
   const stopListening = useCallback(() => {
