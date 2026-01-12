@@ -5,6 +5,8 @@ import { useGoals, Goal } from './useGoals';
 import { useTasks, Task } from './useTasks';
 import { useUserContext } from './useUserContext';
 import { useCameras } from './useCameras';
+import { useSettings } from './useSettings';
+import { useVoiceServices } from './useVoiceServices';
 import { toast } from 'sonner';
 
 interface Intervention {
@@ -59,6 +61,13 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
   const { tasks, refetch: refetchTasks } = useTasks();
   const { context, updateContext } = useUserContext();
   const { cameras } = useCameras();
+  const { settings } = useSettings();
+  
+  // Use voice services with current settings
+  const voiceServices = useVoiceServices({
+    ttsProvider: settings.voice?.ttsProvider || 'browser',
+    sttProvider: settings.voice?.sttProvider || 'browser',
+  });
   
   const [isActive, setIsActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -69,7 +78,6 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
   const observationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recentObservationsRef = useRef<RecentObservation[]>([]);
   const recentInterventionsRef = useRef<RecentIntervention[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastInterventionTimeRef = useRef<number>(0);
   
   const {
@@ -99,7 +107,7 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
     }
   }, [cameras]);
 
-  // Speak a message using TTS
+  // Speak a message using configured TTS provider
   const speak = useCallback(async (text: string) => {
     if (!text.trim()) return;
 
@@ -107,47 +115,14 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
     config.onSpeaking?.(true);
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ text }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`TTS failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.audioContent) {
-        const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
-        audioRef.current = new Audio(audioUrl);
-        
-        audioRef.current.onended = () => {
-          setIsSpeaking(false);
-          config.onSpeaking?.(false);
-        };
-        
-        audioRef.current.onerror = () => {
-          setIsSpeaking(false);
-          config.onSpeaking?.(false);
-        };
-        
-        await audioRef.current.play();
-      }
+      await voiceServices.speak(text);
     } catch (err) {
       console.error('TTS error:', err);
+    } finally {
       setIsSpeaking(false);
       config.onSpeaking?.(false);
     }
-  }, [config]);
+  }, [config, voiceServices]);
 
   // Log intervention to database
   const logIntervention = useCallback(async (
@@ -356,17 +331,14 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
       observationIntervalRef.current = null;
     }
     
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    voiceServices.stopSpeaking();
     
     setIsActive(false);
     setIsProcessing(false);
     setIsSpeaking(false);
     
     toast.info('Life manager stopped');
-  }, []);
+  }, [voiceServices]);
 
   // Process voice input
   const processVoiceInput = useCallback(async (transcript: string) => {
@@ -380,11 +352,9 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
       if (observationIntervalRef.current) {
         clearInterval(observationIntervalRef.current);
       }
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      voiceServices.stopSpeaking();
     };
-  }, []);
+  }, [voiceServices]);
 
   return {
     // State
