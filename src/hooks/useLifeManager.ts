@@ -18,6 +18,7 @@ interface Intervention {
   updatedActivity?: string;
   updatedRoom?: string;
   error?: string;
+  tasksCreated?: string[];
 }
 
 interface RecentObservation {
@@ -55,7 +56,7 @@ function getTimeOfDay(hour: number): string {
 export function useLifeManager(config: LifeManagerConfig = {}) {
   const { user } = useAuth();
   const { goals } = useGoals();
-  const { tasks } = useTasks();
+  const { tasks, refetch: refetchTasks } = useTasks();
   const { context, updateContext } = useUserContext();
   const { cameras } = useCameras();
   
@@ -283,6 +284,12 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
           current_room: intervention.updatedRoom || context?.current_room,
           current_activity: intervention.updatedActivity || context?.current_activity,
         });
+      }
+
+      // Handle tasks created by AI
+      if (intervention.tasksCreated && intervention.tasksCreated.length > 0) {
+        refetchTasks();
+        toast.success(`Created ${intervention.tasksCreated.length} task(s) from observation`);
       }
 
       // Execute intervention
