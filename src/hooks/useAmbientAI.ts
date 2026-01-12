@@ -3,6 +3,7 @@ import { useScribe, CommitStrategy } from '@elevenlabs/react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useGoals, Goal } from './useGoals';
+import { useTasks, Task } from './useTasks';
 
 interface GuardianResponse {
   shouldSpeak: boolean;
@@ -10,6 +11,7 @@ interface GuardianResponse {
   alertLevel?: 'none' | 'info' | 'warning' | 'critical';
   observation?: string;
   error?: string;
+  taskCreated?: boolean;
 }
 
 interface ConversationMessage {
@@ -27,6 +29,7 @@ interface AmbientAIConfig {
 
 export function useAmbientAI(config: AmbientAIConfig = {}) {
   const { goals } = useGoals();
+  const { tasks, refetch: refetchTasks } = useTasks();
   const [isActive, setIsActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -40,7 +43,7 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
   const lastProcessedTranscriptRef = useRef<string>('');
   const proactiveCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const goalsRef = useRef<Goal[]>([]);
-
+  const tasksRef = useRef<Task[]>([]);
   // ElevenLabs realtime STT
   const scribe = useScribe({
     modelId: 'scribe_v2_realtime',
@@ -59,10 +62,14 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
     },
   });
 
-  // Keep goals ref updated
+  // Keep goals and tasks refs updated
   useEffect(() => {
     goalsRef.current = goals;
   }, [goals]);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   // Schedule next proactive check with random interval
   const scheduleProactiveCheck = useCallback(() => {
@@ -98,6 +105,8 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
     setIsProcessing(true);
 
     try {
+      const pendingTasks = tasksRef.current.filter(t => t.status === 'pending' || t.status === 'in_progress');
+
       const { data, error: invokeError } = await supabase.functions.invoke('ai-guardian', {
         body: {
           goals: activeGoals.map(g => ({
@@ -111,12 +120,27 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
             status: g.status,
             due_date: g.due_date,
           })),
+          tasks: pendingTasks.map(t => ({
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            category: t.category,
+            status: t.status,
+            priority: t.priority,
+            due_at: t.due_at,
+            room: t.room,
+          })),
           isProactiveCheck: true,
           conversationHistory: conversationHistoryRef.current.slice(-6),
         },
       });
 
       if (invokeError) throw invokeError;
+
+      // If a task was created, refresh the tasks list
+      if (data?.taskCreated) {
+        refetchTasks();
+      }
 
       const response = data as GuardianResponse;
 
@@ -156,6 +180,7 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
       });
 
       const activeGoals = goalsRef.current.filter(g => g.status === 'active');
+      const pendingTasks = tasksRef.current.filter(t => t.status === 'pending' || t.status === 'in_progress');
 
       const { data, error: invokeError } = await supabase.functions.invoke('ai-guardian', {
         body: {
@@ -170,6 +195,16 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
             unit: g.unit,
             status: g.status,
             due_date: g.due_date,
+          })),
+          tasks: pendingTasks.map(t => ({
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            category: t.category,
+            status: t.status,
+            priority: t.priority,
+            due_at: t.due_at,
+            room: t.room,
           })),
           conversationHistory: conversationHistoryRef.current.slice(-10),
         },
@@ -186,6 +221,12 @@ export function useAmbientAI(config: AmbientAIConfig = {}) {
           toast.error('AI credits depleted. Please add funds.');
         }
         return;
+      }
+
+      // If a task was created, refresh the tasks list
+      if (response.taskCreated) {
+        refetchTasks();
+        toast.success('Task created');
       }
 
       if (response.shouldSpeak && response.response) {
