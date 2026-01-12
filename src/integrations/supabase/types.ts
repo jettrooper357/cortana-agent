@@ -14,16 +14,259 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cameras: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          http_url: string | null
+          id: string
+          ip_address: string | null
+          is_active: boolean | null
+          last_seen: string | null
+          name: string
+          password: string | null
+          port: number | null
+          room: string | null
+          rtsp_url: string | null
+          updated_at: string | null
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          http_url?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_seen?: string | null
+          name: string
+          password?: string | null
+          port?: number | null
+          room?: string | null
+          rtsp_url?: string | null
+          updated_at?: string | null
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          http_url?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_seen?: string | null
+          name?: string
+          password?: string | null
+          port?: number | null
+          room?: string | null
+          rtsp_url?: string | null
+          updated_at?: string | null
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      goal_logs: {
+        Row: {
+          goal_id: string
+          id: string
+          logged_at: string | null
+          metadata: Json | null
+          notes: string | null
+          source: string | null
+          user_id: string
+          value: number | null
+        }
+        Insert: {
+          goal_id: string
+          id?: string
+          logged_at?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          source?: string | null
+          user_id: string
+          value?: number | null
+        }
+        Update: {
+          goal_id?: string
+          id?: string
+          logged_at?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          source?: string | null
+          user_id?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_logs_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          camera_id: string | null
+          category: string | null
+          created_at: string | null
+          current_value: number | null
+          description: string | null
+          due_date: string | null
+          id: string
+          monitoring_type: string[] | null
+          n8n_workflow_id: string | null
+          status: string | null
+          target_value: number | null
+          title: string
+          unit: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          camera_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          current_value?: number | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          monitoring_type?: string[] | null
+          n8n_workflow_id?: string | null
+          status?: string | null
+          target_value?: number | null
+          title: string
+          unit?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          camera_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          current_value?: number | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          monitoring_type?: string[] | null
+          n8n_workflow_id?: string | null
+          status?: string | null
+          target_value?: number | null
+          title?: string
+          unit?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_camera_id_fkey"
+            columns: ["camera_id"]
+            isOneToOne: false
+            referencedRelation: "cameras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      n8n_integrations: {
+        Row: {
+          config: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_sync: string | null
+          name: string
+          type: string | null
+          updated_at: string | null
+          user_id: string
+          webhook_url: string
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync?: string | null
+          name: string
+          type?: string | null
+          updated_at?: string | null
+          user_id: string
+          webhook_url: string
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync?: string | null
+          name?: string
+          type?: string | null
+          updated_at?: string | null
+          user_id?: string
+          webhook_url?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          settings: Json
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          settings?: Json
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          settings?: Json
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +393,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
