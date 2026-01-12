@@ -497,6 +497,143 @@ export type Database = {
         }
         Relationships: []
       }
+      rule_executions: {
+        Row: {
+          actions_executed: Json | null
+          all_conditions_met: boolean
+          conditions_evaluated: Json | null
+          created_at: string
+          error_message: string | null
+          execution_status: string
+          explanation: string | null
+          id: string
+          rule_id: string
+          trigger_data: Json | null
+          triggered_at: string
+          user_id: string
+        }
+        Insert: {
+          actions_executed?: Json | null
+          all_conditions_met: boolean
+          conditions_evaluated?: Json | null
+          created_at?: string
+          error_message?: string | null
+          execution_status?: string
+          explanation?: string | null
+          id?: string
+          rule_id: string
+          trigger_data?: Json | null
+          triggered_at?: string
+          user_id: string
+        }
+        Update: {
+          actions_executed?: Json | null
+          all_conditions_met?: boolean
+          conditions_evaluated?: Json | null
+          created_at?: string
+          error_message?: string | null
+          execution_status?: string
+          explanation?: string | null
+          id?: string
+          rule_id?: string
+          trigger_data?: Json | null
+          triggered_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_executions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rules: {
+        Row: {
+          actions: Json
+          category: string | null
+          conditions: Json | null
+          cooldown_minutes: number | null
+          created_at: string
+          description: string | null
+          escalation_action: Json | null
+          escalation_after_minutes: number | null
+          escalation_enabled: boolean | null
+          excluded_rooms: string[] | null
+          excluded_times: Json | null
+          explanation_template: string | null
+          id: string
+          is_enabled: boolean | null
+          last_fired_at: string | null
+          last_reset_date: string | null
+          max_fires_per_day: number | null
+          name: string
+          severity: string | null
+          times_fired: number | null
+          times_fired_today: number | null
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actions?: Json
+          category?: string | null
+          conditions?: Json | null
+          cooldown_minutes?: number | null
+          created_at?: string
+          description?: string | null
+          escalation_action?: Json | null
+          escalation_after_minutes?: number | null
+          escalation_enabled?: boolean | null
+          excluded_rooms?: string[] | null
+          excluded_times?: Json | null
+          explanation_template?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          last_fired_at?: string | null
+          last_reset_date?: string | null
+          max_fires_per_day?: number | null
+          name: string
+          severity?: string | null
+          times_fired?: number | null
+          times_fired_today?: number | null
+          trigger_config?: Json
+          trigger_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actions?: Json
+          category?: string | null
+          conditions?: Json | null
+          cooldown_minutes?: number | null
+          created_at?: string
+          description?: string | null
+          escalation_action?: Json | null
+          escalation_after_minutes?: number | null
+          escalation_enabled?: boolean | null
+          excluded_rooms?: string[] | null
+          excluded_times?: Json | null
+          explanation_template?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          last_fired_at?: string | null
+          last_reset_date?: string | null
+          max_fires_per_day?: number | null
+          name?: string
+          severity?: string | null
+          times_fired?: number | null
+          times_fired_today?: number | null
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           category: string | null

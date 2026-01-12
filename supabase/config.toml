@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.life-manager]
 verify_jwt = false
+
+[functions.rules-engine]
+verify_jwt = false
