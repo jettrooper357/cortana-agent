@@ -54,7 +54,7 @@ Your core directives:
 3. ADVISE: Proactively alert users to important situations
 4. ASSIST: Answer questions and help with home automation
 5. TRACK: Monitor and encourage progress on user's personal goals
-6. MANAGE: Create and manage tasks when users request them
+6. MANAGE: Create and manage tasks - both when requested AND when detected from conversation
 
 Behavior guidelines:
 - Be concise and natural in speech (responses will be spoken aloud)
@@ -65,12 +65,26 @@ Behavior guidelines:
 - When doing proactive goal checks, pick ONE goal to focus on and be encouraging but not annoying
 - Vary your approach: sometimes ask for updates, sometimes offer encouragement, sometimes remind of deadlines
 
-TASK CREATION:
-- When users ask to add/create a task, use the create_task tool
-- Parse natural language: "remind me to take out trash tomorrow" → title: "Take out trash", due: tomorrow
-- Infer priority from urgency words: "urgent", "important" → high; "sometime", "eventually" → low
-- Infer category from context: cleaning, shopping, work, health, etc.
-- Confirm task creation in your response
+## AUTOMATIC TASK DETECTION FROM CONVERSATION
+
+CRITICAL: Listen for task-worthy information in conversation and CREATE TASKS automatically:
+
+1. **Explicit requests**: "Add a task to...", "Remind me to...", "Create a task for..."
+2. **Implied tasks**: "I need to...", "I should...", "I have to...", "Don't let me forget to..."
+3. **Commitments**: "I told [person] I would...", "I promised to...", "I'm supposed to..."
+4. **Appointments**: "I have a meeting at...", "Doctor's appointment on...", "Call with [person] at..."
+5. **Deadlines**: "The [thing] is due on...", "I need to finish [thing] by..."
+6. **Mentions of forgotten items**: "Oh I forgot to...", "I still haven't...", "I never got around to..."
+7. **Plans**: "This weekend I'm going to...", "Tomorrow I need to...", "Later I should..."
+
+When you detect these patterns:
+- Use the create_task tool to capture the task
+- Be smart about due dates (parse "tomorrow", "next Tuesday", "this weekend", etc.)
+- Infer priority: urgent/important = high, sometime/eventually = low, default = medium
+- Infer category from context
+- Confirm briefly in your spoken response ("Got it, I'll add that to your tasks")
+
+IMPORTANT: Check existing tasks to avoid duplicates. Only create if no similar task exists.
 
 Response format:
 - If user spoke directly to you, always respond
@@ -84,7 +98,8 @@ Current context will include:
 - imageBase64: Camera snapshot (if available)
 - sensorData: Home Assistant entity states
 - goals: User's personal goals with progress
-- tasks: User's current tasks
+- tasks: User's current tasks (CHECK FOR DUPLICATES before creating)
+- conversationHistory: Recent conversation for context
 - isProactiveCheck: If true, this is a random check-in (be brief and pick one topic)`;
 
 serve(async (req) => {
@@ -129,19 +144,16 @@ serve(async (req) => {
     }
 
     if (tasks?.length) {
-      const pendingTasks = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress');
-      if (pendingTasks.length > 0) {
-        const tasksSummary = pendingTasks
-          .map(t => {
-            const parts = [`- [${t.priority.toUpperCase()}] ${t.title}`];
-            if (t.status === 'in_progress') parts.push('(IN PROGRESS)');
-            if (t.due_at) parts.push(`due: ${t.due_at}`);
-            if (t.room) parts.push(`in: ${t.room}`);
-            return parts.join(' ');
-          })
-          .join("\n");
-        contextParts.push(`User's pending tasks:\n${tasksSummary}`);
-      }
+      const allTasks = tasks;
+      const tasksSummary = allTasks
+        .map(t => {
+          const parts = [`- [${t.status.toUpperCase()}] [${t.priority.toUpperCase()}] ${t.title}`];
+          if (t.due_at) parts.push(`due: ${t.due_at}`);
+          if (t.room) parts.push(`in: ${t.room}`);
+          return parts.join(' ');
+        })
+        .join("\n");
+      contextParts.push(`User's existing tasks (CHECK FOR DUPLICATES before creating new ones!):\n${tasksSummary}`);
     }
     
     if (sensorData?.entities?.length) {
@@ -235,7 +247,7 @@ serve(async (req) => {
         type: "function",
         function: {
           name: "create_task",
-          description: "Create a new task for the user. Use when user asks to add, create, or remind about a task.",
+          description: "Create a new task for the user. Use when user explicitly asks OR when you detect task-worthy information in conversation (commitments, plans, things they need to do, appointments, etc.)",
           parameters: {
             type: "object",
             properties: {
@@ -245,20 +257,20 @@ serve(async (req) => {
               },
               description: {
                 type: "string",
-                description: "Optional longer description",
+                description: "Optional longer description or context from the conversation",
               },
               category: {
                 type: "string",
-                description: "Category like: cleaning, shopping, work, health, home, errands, personal",
+                description: "Category: cleaning, shopping, work, health, home, errands, personal, appointments, calls, finance",
               },
               priority: {
                 type: "string",
                 enum: ["low", "medium", "high", "urgent"],
-                description: "Task priority based on urgency words used",
+                description: "Task priority - urgent/important mentions = high, sometime/eventually = low, default = medium",
               },
               due_at: {
                 type: "string",
-                description: "ISO date string for when task is due. Parse natural language like 'tomorrow', 'next week', 'Friday'",
+                description: "When task is due. Parse natural language: 'tomorrow', 'next week', 'Friday', 'this weekend', 'end of month'. Use ISO format.",
               },
               room: {
                 type: "string",
@@ -270,7 +282,11 @@ serve(async (req) => {
               },
               spoken_response: {
                 type: "string",
-                description: "What to say to confirm task creation",
+                description: "Brief confirmation of task creation (e.g., 'Got it, I added that to your tasks')",
+              },
+              detected_from_context: {
+                type: "boolean",
+                description: "True if this was detected from conversation context rather than explicit request",
               },
             },
             required: ["title", "spoken_response"],
@@ -351,50 +367,78 @@ serve(async (req) => {
         const { data: { user }, error: userError } = await supabase.auth.getUser(token);
         
         if (user && !userError) {
-          // Parse due_at if it's a natural language date
-          let dueAt = taskToCreate.due_at;
-          if (dueAt && typeof dueAt === 'string') {
-            const now = new Date();
-            const lowerDue = dueAt.toLowerCase();
-            
-            if (lowerDue === 'today') {
-              dueAt = new Date(now.setHours(23, 59, 59, 999)).toISOString();
-            } else if (lowerDue === 'tomorrow') {
-              const tomorrow = new Date(now);
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              tomorrow.setHours(23, 59, 59, 999);
-              dueAt = tomorrow.toISOString();
-            } else if (lowerDue.includes('next week')) {
-              const nextWeek = new Date(now);
-              nextWeek.setDate(nextWeek.getDate() + 7);
-              nextWeek.setHours(23, 59, 59, 999);
-              dueAt = nextWeek.toISOString();
-            }
-            // Otherwise assume it's already ISO format or let it be null
-          }
-
-          const { error: insertError } = await supabase
+          // Check for duplicates first
+          const { data: existingTasks } = await supabase
             .from('tasks')
-            .insert({
-              user_id: user.id,
-              title: taskToCreate.title,
-              description: taskToCreate.description || null,
-              category: taskToCreate.category || null,
-              priority: taskToCreate.priority || 'medium',
-              due_at: dueAt || null,
-              room: taskToCreate.room || null,
-              estimated_minutes: taskToCreate.estimated_minutes || null,
-              status: 'pending',
-              requires_location: false,
-              is_recurring: false,
-              times_reminded: 0,
-            });
+            .select('id, title')
+            .eq('user_id', user.id)
+            .in('status', ['pending', 'in_progress'])
+            .ilike('title', `%${(taskToCreate.title as string).split(' ').slice(0, 3).join('%')}%`);
 
-          if (insertError) {
-            console.error("Failed to create task:", insertError);
-            finalResponse.response = "I tried to create that task but ran into an issue. Please try again.";
+          if (existingTasks && existingTasks.length > 0) {
+            console.log(`Skipping potential duplicate task: ${taskToCreate.title}`);
+            finalResponse.response = `I think you already have a similar task: "${existingTasks[0].title}"`;
+            finalResponse.taskCreated = false;
           } else {
-            finalResponse.taskCreated = true;
+            // Parse due_at if it's a natural language date
+            let dueAt = taskToCreate.due_at;
+            if (dueAt && typeof dueAt === 'string') {
+              const now = new Date();
+              const lowerDue = dueAt.toLowerCase();
+              
+              if (lowerDue === 'today') {
+                dueAt = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+              } else if (lowerDue === 'tomorrow') {
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(23, 59, 59, 999);
+                dueAt = tomorrow.toISOString();
+              } else if (lowerDue.includes('next week')) {
+                const nextWeek = new Date(now);
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                nextWeek.setHours(23, 59, 59, 999);
+                dueAt = nextWeek.toISOString();
+              } else if (lowerDue.includes('this weekend')) {
+                const weekend = new Date(now);
+                const dayOfWeek = weekend.getDay();
+                const daysUntilSaturday = dayOfWeek === 0 ? 6 : 6 - dayOfWeek;
+                weekend.setDate(weekend.getDate() + daysUntilSaturday);
+                weekend.setHours(23, 59, 59, 999);
+                dueAt = weekend.toISOString();
+              } else if (lowerDue.includes('end of month')) {
+                const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                endOfMonth.setHours(23, 59, 59, 999);
+                dueAt = endOfMonth.toISOString();
+              }
+            }
+
+            const description = taskToCreate.detected_from_context 
+              ? `${taskToCreate.description || ''} (Auto-detected from conversation)`.trim()
+              : taskToCreate.description || null;
+
+            const { error: insertError } = await supabase
+              .from('tasks')
+              .insert({
+                user_id: user.id,
+                title: taskToCreate.title,
+                description,
+                category: taskToCreate.category || null,
+                priority: taskToCreate.priority || 'medium',
+                due_at: dueAt || null,
+                room: taskToCreate.room || null,
+                estimated_minutes: taskToCreate.estimated_minutes || null,
+                status: 'pending',
+                requires_location: false,
+                is_recurring: false,
+                times_reminded: 0,
+              });
+
+            if (insertError) {
+              console.error("Failed to create task:", insertError);
+              finalResponse.response = "I tried to create that task but ran into an issue. Please try again.";
+            } else {
+              finalResponse.taskCreated = true;
+            }
           }
         }
       } catch (err) {
