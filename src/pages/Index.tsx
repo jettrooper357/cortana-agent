@@ -1,7 +1,7 @@
-import VoiceInterface from '@/components/VoiceInterface';
+import AmbientVoiceInterface from '@/components/AmbientVoiceInterface';
 
 const Index = () => {
-  return <VoiceInterface />;
+  return <AmbientVoiceInterface />;
 };
 
 export default Index;
