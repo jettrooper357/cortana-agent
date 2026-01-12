@@ -2,3 +2,12 @@ project_id = "zqwgohljhbhstxodsdda"
 
 [functions.home-assistant]
 verify_jwt = false
+
+[functions.elevenlabs-scribe-token]
+verify_jwt = false
+
+[functions.elevenlabs-tts]
+verify_jwt = false
+
+[functions.ai-guardian]
+verify_jwt = false
