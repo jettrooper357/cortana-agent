@@ -14,6 +14,122 @@ export type Database = {
   }
   public: {
     Tables: {
+      behavioral_observations: {
+        Row: {
+          activity_confidence: number | null
+          activity_detected: string | null
+          ai_interpretation: string | null
+          anomaly_score: number | null
+          camera_id: string | null
+          created_at: string
+          id: string
+          objects_detected: string[] | null
+          observed_at: string
+          room: string | null
+          sensor_data: Json | null
+          snapshot_description: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_confidence?: number | null
+          activity_detected?: string | null
+          ai_interpretation?: string | null
+          anomaly_score?: number | null
+          camera_id?: string | null
+          created_at?: string
+          id?: string
+          objects_detected?: string[] | null
+          observed_at?: string
+          room?: string | null
+          sensor_data?: Json | null
+          snapshot_description?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_confidence?: number | null
+          activity_detected?: string | null
+          ai_interpretation?: string | null
+          anomaly_score?: number | null
+          camera_id?: string | null
+          created_at?: string
+          id?: string
+          objects_detected?: string[] | null
+          observed_at?: string
+          room?: string | null
+          sensor_data?: Json | null
+          snapshot_description?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "behavioral_observations_camera_id_fkey"
+            columns: ["camera_id"]
+            isOneToOne: false
+            referencedRelation: "cameras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      behavioral_patterns: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          days_of_week: number[] | null
+          description: string | null
+          expected_behavior: string | null
+          frequency_per_week: number | null
+          id: string
+          is_active: boolean | null
+          last_observed_at: string | null
+          pattern_name: string
+          pattern_type: string
+          room: string | null
+          time_of_day: string[] | null
+          times_observed: number | null
+          typical_duration_minutes: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          days_of_week?: number[] | null
+          description?: string | null
+          expected_behavior?: string | null
+          frequency_per_week?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_observed_at?: string | null
+          pattern_name: string
+          pattern_type: string
+          room?: string | null
+          time_of_day?: string[] | null
+          times_observed?: number | null
+          typical_duration_minutes?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          days_of_week?: number[] | null
+          description?: string | null
+          expected_behavior?: string | null
+          frequency_per_week?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_observed_at?: string | null
+          pattern_name?: string
+          pattern_type?: string
+          room?: string | null
+          time_of_day?: string[] | null
+          times_observed?: number | null
+          typical_duration_minutes?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cameras: {
         Row: {
           created_at: string | null
@@ -273,6 +389,75 @@ export type Database = {
         }
         Relationships: []
       }
+      interventions: {
+        Row: {
+          acknowledged_at: string | null
+          action_taken: string | null
+          context_snapshot: Json | null
+          created_at: string
+          effectiveness_score: number | null
+          id: string
+          message: string
+          observation_id: string | null
+          related_goal_id: string | null
+          room: string | null
+          severity: string
+          trigger_reason: string
+          trigger_type: string
+          triggered_at: string
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          action_taken?: string | null
+          context_snapshot?: Json | null
+          created_at?: string
+          effectiveness_score?: number | null
+          id?: string
+          message: string
+          observation_id?: string | null
+          related_goal_id?: string | null
+          room?: string | null
+          severity?: string
+          trigger_reason: string
+          trigger_type: string
+          triggered_at?: string
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          action_taken?: string | null
+          context_snapshot?: Json | null
+          created_at?: string
+          effectiveness_score?: number | null
+          id?: string
+          message?: string
+          observation_id?: string | null
+          related_goal_id?: string | null
+          room?: string | null
+          severity?: string
+          trigger_reason?: string
+          trigger_type?: string
+          triggered_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interventions_observation_id_fkey"
+            columns: ["observation_id"]
+            isOneToOne: false
+            referencedRelation: "behavioral_observations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interventions_related_goal_id_fkey"
+            columns: ["related_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       n8n_integrations: {
         Row: {
           config: Json | null
@@ -311,6 +496,140 @@ export type Database = {
           webhook_url?: string
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          category: string | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_at: string | null
+          estimated_minutes: number | null
+          id: string
+          is_recurring: boolean | null
+          last_reminded_at: string | null
+          priority: string
+          recurrence_rule: string | null
+          requires_location: boolean | null
+          room: string | null
+          started_at: string | null
+          status: string
+          times_reminded: number | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_at?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          is_recurring?: boolean | null
+          last_reminded_at?: string | null
+          priority?: string
+          recurrence_rule?: string | null
+          requires_location?: boolean | null
+          room?: string | null
+          started_at?: string | null
+          status?: string
+          times_reminded?: number | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_at?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          is_recurring?: boolean | null
+          last_reminded_at?: string | null
+          priority?: string
+          recurrence_rule?: string | null
+          requires_location?: boolean | null
+          room?: string | null
+          started_at?: string | null
+          status?: string
+          times_reminded?: number | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_context: {
+        Row: {
+          active_task_id: string | null
+          activity_started_at: string | null
+          current_activity: string | null
+          current_room: string | null
+          id: string
+          idle_minutes: number | null
+          idle_minutes_today: number | null
+          interventions_today: number | null
+          last_intervention_at: string | null
+          last_movement_at: string | null
+          productive_minutes_today: number | null
+          room_entered_at: string | null
+          session_started_at: string | null
+          task_started_at: string | null
+          tasks_completed_today: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_task_id?: string | null
+          activity_started_at?: string | null
+          current_activity?: string | null
+          current_room?: string | null
+          id?: string
+          idle_minutes?: number | null
+          idle_minutes_today?: number | null
+          interventions_today?: number | null
+          last_intervention_at?: string | null
+          last_movement_at?: string | null
+          productive_minutes_today?: number | null
+          room_entered_at?: string | null
+          session_started_at?: string | null
+          task_started_at?: string | null
+          tasks_completed_today?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_task_id?: string | null
+          activity_started_at?: string | null
+          current_activity?: string | null
+          current_room?: string | null
+          id?: string
+          idle_minutes?: number | null
+          idle_minutes_today?: number | null
+          interventions_today?: number | null
+          last_intervention_at?: string | null
+          last_movement_at?: string | null
+          productive_minutes_today?: number | null
+          room_entered_at?: string | null
+          session_started_at?: string | null
+          task_started_at?: string | null
+          tasks_completed_today?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_context_active_task_id_fkey"
+            columns: ["active_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

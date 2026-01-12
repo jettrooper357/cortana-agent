@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.ai-guardian]
 verify_jwt = false
+
+[functions.life-manager]
+verify_jwt = false

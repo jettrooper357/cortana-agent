@@ -1,7 +1,7 @@
-import AmbientVoiceInterface from '@/components/AmbientVoiceInterface';
+import LifeManagerInterface from '@/components/LifeManagerInterface';
 
 const Index = () => {
-  return <AmbientVoiceInterface />;
+  return <LifeManagerInterface />;
 };
 
 export default Index;
