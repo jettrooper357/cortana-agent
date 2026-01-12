@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface WebhookSettings {
   id: string;
@@ -105,13 +106,13 @@ export const useSettings = () => {
       if (existing) {
         const { error } = await supabase
           .from('user_settings')
-          .update({ settings: newSettings as unknown as Record<string, unknown> })
+          .update({ settings: JSON.parse(JSON.stringify(newSettings)) as Json })
           .eq('user_id', user.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('user_settings')
-          .insert({ user_id: user.id, settings: newSettings as unknown as Record<string, unknown> });
+          .insert([{ user_id: user.id, settings: JSON.parse(JSON.stringify(newSettings)) as Json }]);
         if (error) throw error;
       }
       return true;
