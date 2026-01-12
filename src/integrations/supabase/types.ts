@@ -171,6 +171,108 @@ export type Database = {
           },
         ]
       }
+      home_assistant_config: {
+        Row: {
+          created_at: string
+          id: string
+          instance_url: string
+          is_active: boolean | null
+          last_connected_at: string | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          instance_url: string
+          is_active?: boolean | null
+          last_connected_at?: string | null
+          name?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          instance_url?: string
+          is_active?: boolean | null
+          last_connected_at?: string | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      home_assistant_entities: {
+        Row: {
+          attributes: Json | null
+          created_at: string
+          domain: string | null
+          entity_id: string
+          friendly_name: string | null
+          id: string
+          last_updated_at: string | null
+          state: string | null
+          user_id: string
+        }
+        Insert: {
+          attributes?: Json | null
+          created_at?: string
+          domain?: string | null
+          entity_id: string
+          friendly_name?: string | null
+          id?: string
+          last_updated_at?: string | null
+          state?: string | null
+          user_id: string
+        }
+        Update: {
+          attributes?: Json | null
+          created_at?: string
+          domain?: string | null
+          entity_id?: string
+          friendly_name?: string | null
+          id?: string
+          last_updated_at?: string | null
+          state?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      home_assistant_events: {
+        Row: {
+          entity_id: string
+          event_type: string | null
+          id: string
+          metadata: Json | null
+          new_state: string | null
+          occurred_at: string | null
+          old_state: string | null
+          user_id: string
+        }
+        Insert: {
+          entity_id: string
+          event_type?: string | null
+          id?: string
+          metadata?: Json | null
+          new_state?: string | null
+          occurred_at?: string | null
+          old_state?: string | null
+          user_id: string
+        }
+        Update: {
+          entity_id?: string
+          event_type?: string | null
+          id?: string
+          metadata?: Json | null
+          new_state?: string | null
+          occurred_at?: string | null
+          old_state?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       n8n_integrations: {
         Row: {
           config: Json | null
