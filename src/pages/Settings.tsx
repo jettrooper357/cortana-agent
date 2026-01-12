@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSettings, WebhookSettings } from '@/hooks/useSettings';
+import { useSettings, WebhookSettings, VoiceProvider } from '@/hooks/useSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon, Volume2, Mic } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -28,7 +28,7 @@ type WebhookFormData = z.infer<typeof webhookSchema>;
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { settings, saveWebhook, deleteWebhook, clearAllSettings } = useSettings();
+  const { settings, saveWebhook, deleteWebhook, clearAllSettings, updateVoiceSettings } = useSettings();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState<string | null>(null);
 
@@ -152,6 +152,100 @@ export default function Settings() {
             <h1 className="text-3xl font-bold">Settings</h1>
           </div>
         </div>
+
+        {/* Voice Settings */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Volume2 className="h-5 w-5" />
+              Voice Settings
+            </CardTitle>
+            <CardDescription>
+              Configure text-to-speech and speech-to-text providers
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Volume2 className="h-4 w-4" />
+                  Text-to-Speech Provider
+                </Label>
+                <Select
+                  value={settings.voice?.ttsProvider || 'browser'}
+                  onValueChange={(value: VoiceProvider) => {
+                    updateVoiceSettings({ ttsProvider: value });
+                    toast({
+                      title: 'TTS Provider Updated',
+                      description: `Now using ${value === 'browser' ? 'Browser (free)' : 'ElevenLabs'} for text-to-speech`,
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="browser">
+                      <div className="flex flex-col items-start">
+                        <span>Browser (Free)</span>
+                        <span className="text-xs text-muted-foreground">Built-in browser voices</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="elevenlabs">
+                      <div className="flex flex-col items-start">
+                        <span>ElevenLabs</span>
+                        <span className="text-xs text-muted-foreground">Premium AI voices (requires API key)</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Mic className="h-4 w-4" />
+                  Speech-to-Text Provider
+                </Label>
+                <Select
+                  value={settings.voice?.sttProvider || 'browser'}
+                  onValueChange={(value: VoiceProvider) => {
+                    updateVoiceSettings({ sttProvider: value });
+                    toast({
+                      title: 'STT Provider Updated',
+                      description: `Now using ${value === 'browser' ? 'Browser (free)' : 'ElevenLabs Scribe'} for speech recognition`,
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="browser">
+                      <div className="flex flex-col items-start">
+                        <span>Browser (Free)</span>
+                        <span className="text-xs text-muted-foreground">Built-in browser speech recognition</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="elevenlabs">
+                      <div className="flex flex-col items-start">
+                        <span>ElevenLabs Scribe</span>
+                        <span className="text-xs text-muted-foreground">Premium STT (requires API key)</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="p-4 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <strong>Browser voices</strong> are free and work offline, but quality varies by device.
+                <br />
+                <strong>ElevenLabs</strong> provides premium AI voices but requires an API key configured in your webhooks.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Webhook Configuration */}
         <Card className="mb-8">

@@ -4,7 +4,7 @@ import GlowingRing from '@/components/GlowingRing';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Settings, Volume2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAmbientAI } from '@/hooks/useAmbientAI';
+import { useAmbientAIWithSettings } from '@/hooks/useAmbientAIWithSettings';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
 type SessionState = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -15,7 +15,7 @@ export default function AmbientVoiceInterface() {
   const [lastResponse, setLastResponse] = useState<string>('');
   const [transcript, setTranscript] = useState<string>('');
 
-  const ambientAI = useAmbientAI({
+  const ambientAI = useAmbientAIWithSettings({
     onSpeaking: (speaking) => {
       setSessionState(speaking ? 'speaking' : 'listening');
     },
@@ -191,7 +191,9 @@ export default function AmbientVoiceInterface() {
                   {ambientAI.isActive ? 'Stop Listening' : 'Start Ambient AI'}
                 </p>
                 {ambientAI.isActive && (
-                  <p className="text-xs text-ai-glow mt-1">Always listening</p>
+                  <p className="text-xs text-ai-glow mt-1">
+                    {ambientAI.sttProvider === 'elevenlabs' ? 'ElevenLabs' : 'Browser'} STT
+                  </p>
                 )}
               </div>
             </div>
