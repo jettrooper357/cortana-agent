@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './useAuth';
 
 export interface WebhookSettings {
   id: string;
@@ -23,37 +25,121 @@ const DEFAULT_SETTINGS: AppSettings = {
 const SETTINGS_KEY = 'cortana-app-settings';
 
 export const useSettings = () => {
+  const { user, isLoading: authLoading } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load settings from localStorage on mount
+  // Load settings from database or localStorage
   useEffect(() => {
-    try {
-      const savedSettings = localStorage.getItem(SETTINGS_KEY);
-      if (savedSettings) {
-        const parsedSettings = JSON.parse(savedSettings);
-        setSettings(parsedSettings);
+    const loadSettings = async () => {
+      setIsLoading(true);
+      
+      if (user) {
+        // Try to load from database
+        try {
+          const { data, error } = await supabase
+            .from('user_settings')
+            .select('settings')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          
+          if (error) {
+            console.error('Failed to load settings from database:', error);
+            // Fallback to localStorage
+            loadFromLocalStorage();
+          } else if (data) {
+            const dbSettings = data.settings as unknown as AppSettings;
+            setSettings(dbSettings);
+            console.log('Settings loaded from database:', dbSettings);
+          } else {
+            // No settings in database, check localStorage for migration
+            const localSettings = loadFromLocalStorage();
+            if (localSettings && localSettings.webhooks.length > 0) {
+              // Migrate localStorage to database
+              await saveToDatabase(localSettings);
+              console.log('Migrated settings from localStorage to database');
+            }
+          }
+        } catch (error) {
+          console.error('Error loading settings:', error);
+          loadFromLocalStorage();
+        }
+      } else {
+        // Not logged in, use localStorage
+        loadFromLocalStorage();
       }
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-    } finally {
+      
       setIsLoading(false);
-    }
-  }, []);
+    };
 
-  // Save settings to localStorage
-  const saveSettings = (newSettings: AppSettings) => {
+    const loadFromLocalStorage = (): AppSettings | null => {
+      try {
+        const savedSettings = localStorage.getItem(SETTINGS_KEY);
+        if (savedSettings) {
+          const parsedSettings = JSON.parse(savedSettings);
+          setSettings(parsedSettings);
+          return parsedSettings;
+        }
+      } catch (error) {
+        console.error('Failed to load settings from localStorage:', error);
+      }
+      return null;
+    };
+
+    if (!authLoading) {
+      loadSettings();
+    }
+  }, [user, authLoading]);
+
+  // Save to database
+  const saveToDatabase = async (newSettings: AppSettings): Promise<boolean> => {
+    if (!user) return false;
+    
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
-      setSettings(newSettings);
+      const { data: existing } = await supabase
+        .from('user_settings')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (existing) {
+        const { error } = await supabase
+          .from('user_settings')
+          .update({ settings: newSettings as unknown as Record<string, unknown> })
+          .eq('user_id', user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('user_settings')
+          .insert({ user_id: user.id, settings: newSettings as unknown as Record<string, unknown> });
+        if (error) throw error;
+      }
+      return true;
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      throw error;
+      console.error('Error saving settings to database:', error);
+      return false;
     }
   };
 
+  // Save settings
+  const saveSettings = useCallback(async (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    
+    // Always save to localStorage as backup
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+    } catch (error) {
+      console.error('Failed to save settings to localStorage:', error);
+    }
+    
+    // Save to database if logged in
+    if (user) {
+      await saveToDatabase(newSettings);
+    }
+  }, [user]);
+
   // Add or update webhook
-  const saveWebhook = (webhook: WebhookSettings) => {
+  const saveWebhook = useCallback(async (webhook: WebhookSettings) => {
     const newSettings = { ...settings };
     const existingIndex = newSettings.webhooks.findIndex(w => w.id === webhook.id);
     
@@ -74,11 +160,11 @@ export const useSettings = () => {
       }
     }
     
-    saveSettings(newSettings);
-  };
+    await saveSettings(newSettings);
+  }, [settings, saveSettings]);
 
   // Delete webhook
-  const deleteWebhook = (id: string) => {
+  const deleteWebhook = useCallback(async (id: string) => {
     const newSettings = { ...settings };
     newSettings.webhooks = newSettings.webhooks.filter(w => w.id !== id);
     
@@ -90,21 +176,24 @@ export const useSettings = () => {
       }
     }
     
-    saveSettings(newSettings);
-  };
+    await saveSettings(newSettings);
+  }, [settings, saveSettings]);
 
   // Get active webhook
-  const getActiveWebhook = (): WebhookSettings | undefined => {
-    return settings.webhooks.find(w => w.isActive);
-  };
+  const getActiveWebhook = useCallback((): WebhookSettings | undefined => {
+    console.log('getActiveWebhook called - current webhooks:', settings.webhooks);
+    const active = settings.webhooks.find(w => w.isActive);
+    console.log('Found active webhook:', active);
+    return active;
+  }, [settings.webhooks]);
 
   // Get webhook by ID
-  const getWebhookById = (id: string): WebhookSettings | undefined => {
+  const getWebhookById = useCallback((id: string): WebhookSettings | undefined => {
     return settings.webhooks.find(w => w.id === id);
-  };
+  }, [settings.webhooks]);
 
   // Set default webhook
-  const setDefaultWebhook = (id: string) => {
+  const setDefaultWebhook = useCallback(async (id: string) => {
     const newSettings = { ...settings };
     newSettings.defaultWebhook = id;
     newSettings.webhooks = newSettings.webhooks.map(w => ({
@@ -112,18 +201,25 @@ export const useSettings = () => {
       isActive: w.id === id
     }));
     
-    saveSettings(newSettings);
-  };
+    await saveSettings(newSettings);
+  }, [settings, saveSettings]);
 
   // Clear all settings
-  const clearAllSettings = () => {
+  const clearAllSettings = useCallback(async () => {
     localStorage.removeItem(SETTINGS_KEY);
     setSettings(DEFAULT_SETTINGS);
-  };
+    
+    if (user) {
+      await supabase
+        .from('user_settings')
+        .delete()
+        .eq('user_id', user.id);
+    }
+  }, [user]);
 
   return {
     settings,
-    isLoading,
+    isLoading: isLoading || authLoading,
     saveWebhook,
     deleteWebhook,
     getActiveWebhook,
