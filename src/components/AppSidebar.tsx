@@ -1,4 +1,4 @@
-import { Home, Settings, LayoutDashboard, Camera, Target, Zap, LogIn, UserPlus } from "lucide-react";
+import { Home, Settings, LayoutDashboard, Camera, Target, Zap, LogIn, UserPlus, ListTodo, Sparkles } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -18,8 +18,10 @@ import { Button } from "@/components/ui/button";
 const mainItems = [
   { title: "Home", url: "/", icon: Home },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, requiresAuth: true },
-  { title: "Cameras", url: "/cameras", icon: Camera, requiresAuth: true },
+  { title: "Tasks", url: "/tasks", icon: ListTodo, requiresAuth: true },
   { title: "Goals", url: "/goals", icon: Target, requiresAuth: true },
+  { title: "Rules", url: "/rules", icon: Sparkles, requiresAuth: true },
+  { title: "Cameras", url: "/cameras", icon: Camera, requiresAuth: true },
   { title: "Integrations", url: "/integrations", icon: Zap, requiresAuth: true },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

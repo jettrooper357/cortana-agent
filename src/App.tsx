@@ -13,6 +13,8 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Cameras from "./pages/Cameras";
 import Goals from "./pages/Goals";
+import Tasks from "./pages/Tasks";
+import Rules from "./pages/Rules";
 import Integrations from "./pages/Integrations";
 import NotFound from "./pages/NotFound";
 
@@ -61,6 +63,16 @@ const App = () => (
                   <Route path="/goals" element={
                     <AuthGuard>
                       <Goals />
+                    </AuthGuard>
+                  } />
+                  <Route path="/tasks" element={
+                    <AuthGuard>
+                      <Tasks />
+                    </AuthGuard>
+                  } />
+                  <Route path="/rules" element={
+                    <AuthGuard>
+                      <Rules />
                     </AuthGuard>
                   } />
                   <Route path="/integrations" element={
