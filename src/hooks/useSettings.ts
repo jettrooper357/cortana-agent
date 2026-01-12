@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { Json } from '@/integrations/supabase/types';
 
+export type VoiceProvider = 'browser' | 'elevenlabs';
+
 export interface WebhookSettings {
   id: string;
   name: string;
@@ -13,14 +15,28 @@ export interface WebhookSettings {
   isActive: boolean;
 }
 
+export interface VoiceSettings {
+  ttsProvider: VoiceProvider;
+  sttProvider: VoiceProvider;
+  elevenLabsVoiceId?: string;
+  browserVoiceName?: string;
+}
+
 export interface AppSettings {
   webhooks: WebhookSettings[];
   defaultWebhook?: string;
+  voice: VoiceSettings;
 }
+
+const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+  ttsProvider: 'browser',
+  sttProvider: 'browser',
+};
 
 const DEFAULT_SETTINGS: AppSettings = {
   webhooks: [],
-  defaultWebhook: undefined
+  defaultWebhook: undefined,
+  voice: DEFAULT_VOICE_SETTINGS,
 };
 
 const SETTINGS_KEY = 'cortana-app-settings';
@@ -218,6 +234,15 @@ export const useSettings = () => {
     }
   }, [user]);
 
+  // Update voice settings
+  const updateVoiceSettings = useCallback(async (voice: Partial<VoiceSettings>) => {
+    const newSettings = {
+      ...settings,
+      voice: { ...settings.voice, ...voice },
+    };
+    await saveSettings(newSettings);
+  }, [settings, saveSettings]);
+
   return {
     settings,
     isLoading: isLoading || authLoading,
@@ -227,6 +252,7 @@ export const useSettings = () => {
     getWebhookById,
     setDefaultWebhook,
     clearAllSettings,
-    saveSettings
+    saveSettings,
+    updateVoiceSettings,
   };
 };
