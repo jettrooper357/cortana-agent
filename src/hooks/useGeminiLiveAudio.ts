@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useSettings } from './useSettings';
 
 export type SessionState = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking';
 
@@ -62,6 +63,7 @@ function getSpeechRecognition(): (new () => SpeechRecognition) | null {
  * while working within browser constraints.
  */
 export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
+  const { settings, getActiveWebhook } = useSettings();
   const [state, setState] = useState<SessionState>('idle');
   const [isActive, setIsActive] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState('');
@@ -70,6 +72,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const isProcessingRef = useRef(false);
   const isSpeakingRef = useRef(false);
   const lastProcessedRef = useRef('');
@@ -81,9 +84,85 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     config.onStateChange?.(newState);
   }, [config]);
 
-  // Speak response using browser TTS
+  // Speak response using ElevenLabs or browser TTS
   const speak = useCallback(async (text: string): Promise<void> => {
-    if (!text.trim() || !('speechSynthesis' in window)) return;
+    if (!text.trim()) return;
+
+    isSpeakingRef.current = true;
+    updateState('speaking');
+
+    // Try ElevenLabs first if configured
+    const activeWebhook = getActiveWebhook();
+    const ttsWebhookId = settings.voice?.ttsWebhookId;
+    
+    // Use ElevenLabs if it's available (either as active webhook or if gemini is selected with a fallback)
+    const shouldUseElevenLabs = activeWebhook?.type === 'elevenlabs' || 
+      (ttsWebhookId !== 'browser' && activeWebhook?.apiKey);
+    
+    if (shouldUseElevenLabs && activeWebhook?.apiKey) {
+      try {
+        console.log('[Gemini Live] Using ElevenLabs TTS');
+        
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ text, voiceId: activeWebhook.agentId }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`ElevenLabs TTS failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.audioContent) {
+          // Play the audio
+          await new Promise<void>((resolve, reject) => {
+            const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
+            const audio = new Audio(audioUrl);
+            audioRef.current = audio;
+            
+            audio.onended = () => {
+              audioRef.current = null;
+              isSpeakingRef.current = false;
+              if (isActive) {
+                updateState('listening');
+              }
+              resolve();
+            };
+            
+            audio.onerror = (e) => {
+              console.error('[Gemini Live] Audio playback error:', e);
+              audioRef.current = null;
+              reject(new Error('Audio playback failed'));
+            };
+            
+            audio.play().catch(reject);
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('[Gemini Live] ElevenLabs TTS failed, falling back to browser:', error);
+        // Fall through to browser TTS
+      }
+    }
+
+    // Fallback to browser TTS
+    if (!('speechSynthesis' in window)) {
+      console.warn('[Gemini Live] No speech synthesis available');
+      isSpeakingRef.current = false;
+      if (isActive) {
+        updateState('listening');
+      }
+      return;
+    }
 
     return new Promise((resolve) => {
       // Cancel any ongoing speech
@@ -91,9 +170,6 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
       
       // Small delay after cancel
       setTimeout(() => {
-        isSpeakingRef.current = true;
-        updateState('speaking');
-
         const utterance = new SpeechSynthesisUtterance(text);
         synthRef.current = utterance;
         
@@ -124,7 +200,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
         };
 
         utterance.onerror = (event) => {
-          console.error('Speech synthesis error:', event);
+          console.error('[Gemini Live] Browser TTS error:', event);
           isSpeakingRef.current = false;
           synthRef.current = null;
           if (isActive) {
@@ -136,7 +212,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
         window.speechSynthesis.speak(utterance);
       }, 100);
     });
-  }, [isActive, updateState]);
+  }, [isActive, updateState, settings.voice?.ttsWebhookId, getActiveWebhook]);
 
   // Process transcript with Gemini
   const processTranscript = useCallback(async (transcript: string) => {
@@ -332,6 +408,12 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
 
   // Stop speaking
   const stopSpeaking = useCallback(() => {
+    // Stop ElevenLabs audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    // Stop browser TTS
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -393,6 +475,10 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
         } catch {
           // Ignore
         }
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
       }
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
