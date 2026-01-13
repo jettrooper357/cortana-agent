@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon, Volume2, Mic, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon, Volume2, Mic, ChevronDown, Bot, Sparkles } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -52,7 +52,7 @@ export default function Settings() {
       if (data.type === 'elevenlabs' && !data.agentId?.trim()) {
         toast({
           title: "Validation Error",
-          description: "Agent ID is required for ElevenLabs webhooks",
+          description: "Voice ID is required for ElevenLabs webhooks",
           variant: "destructive",
         });
         return;
@@ -136,6 +136,12 @@ export default function Settings() {
 
   const watchedType = form.watch('type');
 
+  // Get ElevenLabs webhooks for TTS selection
+  const elevenlabsWebhooks = settings.webhooks.filter(w => w.type === 'elevenlabs');
+  
+  // Get webhooks that can be used for conversation (ElevenLabs agents)
+  const conversationWebhooks = settings.webhooks.filter(w => w.type === 'elevenlabs' || w.type === 'openai');
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-4xl mx-auto">
@@ -155,6 +161,66 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Conversation AI Settings */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              Conversation AI
+            </CardTitle>
+            <CardDescription>
+              Select which AI powers Cortana's conversations
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                AI Provider
+              </Label>
+              <Select
+                value={settings.voice?.conversationProvider || 'gemini'}
+                onValueChange={(value: string) => {
+                  updateVoiceSettings({ conversationProvider: value });
+                  const providerName = value === 'gemini' 
+                    ? 'Gemini AI' 
+                    : settings.webhooks.find(w => w.id === value)?.name || 'selected service';
+                  toast({
+                    title: 'Conversation AI Updated',
+                    description: `Now using ${providerName} for conversations`,
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select AI provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini">
+                    <div className="flex flex-col items-start">
+                      <span>Gemini AI</span>
+                      <span className="text-xs text-muted-foreground">Lovable Cloud AI (built-in, no API key needed)</span>
+                    </div>
+                  </SelectItem>
+                  {conversationWebhooks.map((webhook) => (
+                    <SelectItem key={webhook.id} value={webhook.id}>
+                      <div className="flex flex-col items-start">
+                        <span>{webhook.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {webhook.type === 'elevenlabs' ? 'ElevenLabs Conversational Agent' : 'OpenAI Agent'}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Gemini uses browser speech recognition + Gemini AI + your TTS choice. 
+                ElevenLabs agents provide full conversational AI with premium voices.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Voice Settings */}
         <Card className="mb-8">
           <CardHeader>
@@ -163,7 +229,7 @@ export default function Settings() {
               Voice Settings
             </CardTitle>
             <CardDescription>
-              Select which service to use for text-to-speech and speech-to-text
+              Configure text-to-speech and speech-to-text (used with Gemini AI mode)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -174,11 +240,12 @@ export default function Settings() {
                   Text-to-Speech
                 </Label>
                 <Select
-                  value={settings.voice?.ttsWebhookId || 'browser'}
+                  value={settings.voice?.ttsProvider || 'browser'}
                   onValueChange={(value: string) => {
-                    updateVoiceSettings({ ttsWebhookId: value });
-                    const webhook = settings.webhooks.find(w => w.id === value);
-                    const providerName = value === 'browser' ? 'Browser (free)' : webhook?.name || 'selected service';
+                    updateVoiceSettings({ ttsProvider: value });
+                    const providerName = value === 'browser' 
+                      ? 'Browser (free)' 
+                      : settings.webhooks.find(w => w.id === value)?.name || 'selected service';
                     toast({
                       title: 'TTS Updated',
                       description: `Now using ${providerName} for text-to-speech`,
@@ -195,7 +262,7 @@ export default function Settings() {
                         <span className="text-xs text-muted-foreground">Built-in browser voices</span>
                       </div>
                     </SelectItem>
-                    {settings.webhooks.filter(w => w.type === 'elevenlabs').map((webhook) => (
+                    {elevenlabsWebhooks.map((webhook) => (
                       <SelectItem key={webhook.id} value={webhook.id}>
                         <div className="flex flex-col items-start">
                           <span>{webhook.name}</span>
@@ -205,6 +272,9 @@ export default function Settings() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Only applies when using Gemini AI mode
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -213,9 +283,9 @@ export default function Settings() {
                   Speech-to-Text
                 </Label>
                 <Select
-                  value={settings.voice?.sttWebhookId || 'browser'}
+                  value={settings.voice?.sttProvider || 'browser'}
                   onValueChange={(value: string) => {
-                    updateVoiceSettings({ sttWebhookId: value });
+                    updateVoiceSettings({ sttProvider: value });
                     const providerName = value === 'browser' ? 'Browser (free)' : 'selected service';
                     toast({
                       title: 'STT Updated',
@@ -235,13 +305,16 @@ export default function Settings() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Only applies when using Gemini AI mode
+                </p>
               </div>
             </div>
 
             {settings.webhooks.length === 0 && (
               <div className="p-4 bg-muted/50 rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  <strong>No webhooks configured.</strong> Add a webhook below to enable premium AI voices from ElevenLabs or other services.
+                  <strong>No webhooks configured.</strong> Add a webhook below to enable premium AI voices from ElevenLabs or conversational agents.
                 </p>
               </div>
             )}
@@ -279,7 +352,7 @@ export default function Settings() {
                           <FormItem>
                             <FormLabel>Name</FormLabel>
                             <FormControl>
-                              <Input placeholder="My AI Assistant" {...field} />
+                              <Input placeholder="Cortana Voice" {...field} />
                             </FormControl>
                             <FormDescription>
                               A friendly name for this webhook
@@ -321,12 +394,12 @@ export default function Settings() {
                           name="agentId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Agent ID</FormLabel>
+                              <FormLabel>Voice ID / Agent ID</FormLabel>
                               <FormControl>
-                                <Input placeholder="agent_01jzp3zn2dek1vk4ztygtxzna6" {...field} />
+                                <Input placeholder="JBFqnCBsd6RMkjVDRZzb" {...field} />
                               </FormControl>
                               <FormDescription>
-                                Your ElevenLabs agent ID
+                                For TTS: Voice ID. For Agent: Agent ID
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -334,22 +407,18 @@ export default function Settings() {
                         />
                       )}
 
-                      {(watchedType === 'openai' || watchedType === 'elevenlabs') && (
+                      {watchedType === 'openai' && (
                         <FormField
                           control={form.control}
-                          name="apiKey"
+                          name="agentId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>API Key</FormLabel>
+                              <FormLabel>Agent ID</FormLabel>
                               <FormControl>
-                                <Input 
-                                  type="password" 
-                                  placeholder="sk-..." 
-                                  {...field} 
-                                />
+                                <Input placeholder="asst_..." {...field} />
                               </FormControl>
                               <FormDescription>
-                                Your API key for {watchedType === 'openai' ? 'OpenAI' : 'ElevenLabs'}
+                                Your OpenAI assistant ID
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -436,27 +505,35 @@ export default function Settings() {
                 {settings.webhooks.map((webhook) => (
                   <div key={webhook.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
-                      <h3 className="font-semibold">{webhook.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {webhook.type.charAt(0).toUpperCase() + webhook.type.slice(1)}
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium">{webhook.name}</h3>
                         {webhook.isActive && (
-                          <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-ai-glow/20 text-ai-glow">
+                          <span className="px-2 py-0.5 text-xs bg-ai-glow/20 text-ai-glow rounded-full">
                             Active
                           </span>
                         )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {webhook.type === 'elevenlabs' && 'ElevenLabs'}
+                        {webhook.type === 'openai' && 'OpenAI'}
+                        {webhook.type === 'custom' && 'Custom'}
+                        {webhook.agentId && ` • ID: ${webhook.agentId.substring(0, 8)}...`}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleEdit(webhook)}
+                        onClick={() => {
+                          handleEdit(webhook);
+                          setIsWebhookFormOpen(true);
+                        }}
                       >
                         Edit
                       </Button>
                       <Button
-                        variant="outline"
-                        size="sm"
+                        variant="destructive"
+                        size="icon"
                         onClick={() => handleDelete(webhook.id)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -474,15 +551,11 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-destructive">Danger Zone</CardTitle>
             <CardDescription>
-              Irreversible actions that will affect all your settings
+              Irreversible actions
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button
-              variant="destructive"
-              onClick={handleClearAll}
-              className="w-full"
-            >
+            <Button variant="destructive" onClick={handleClearAll}>
               Clear All Settings
             </Button>
           </CardContent>

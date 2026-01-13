@@ -34,11 +34,11 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
   const { settings, getWebhookById } = useSettings();
   
   // Get the configured webhook objects
-  const ttsWebhook = settings.voice?.ttsWebhookId && settings.voice.ttsWebhookId !== 'browser' 
-    ? getWebhookById(settings.voice.ttsWebhookId) 
+  const ttsWebhook = settings.voice?.ttsProvider && settings.voice.ttsProvider !== 'browser' && settings.voice.ttsProvider !== 'gemini'
+    ? getWebhookById(settings.voice.ttsProvider) 
     : null;
-  const sttWebhook = settings.voice?.sttWebhookId && settings.voice.sttWebhookId !== 'browser'
-    ? getWebhookById(settings.voice.sttWebhookId)
+  const sttWebhook = settings.voice?.sttProvider && settings.voice.sttProvider !== 'browser' && settings.voice.sttProvider !== 'gemini'
+    ? getWebhookById(settings.voice.sttProvider)
     : null;
   
   const voiceServices = useVoiceServices({
