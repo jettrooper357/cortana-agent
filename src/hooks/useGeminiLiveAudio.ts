@@ -63,7 +63,7 @@ function getSpeechRecognition(): (new () => SpeechRecognition) | null {
  * while working within browser constraints.
  */
 export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
-  const { settings, getActiveWebhook } = useSettings();
+  const { settings } = useSettings();
   const [state, setState] = useState<SessionState>('idle');
   const [isActive, setIsActive] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState('');
@@ -84,22 +84,23 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     config.onStateChange?.(newState);
   }, [config]);
 
-  // Speak response using ElevenLabs or browser TTS
+  // Speak response using ElevenLabs or browser TTS based on settings
   const speak = useCallback(async (text: string): Promise<void> => {
     if (!text.trim()) return;
 
     isSpeakingRef.current = true;
     updateState('speaking');
 
-    // Try ElevenLabs first if configured
-    const activeWebhook = getActiveWebhook();
     const ttsWebhookId = settings.voice?.ttsWebhookId;
     
-    // Use ElevenLabs if it's available (either as active webhook or if gemini is selected with a fallback)
-    const shouldUseElevenLabs = activeWebhook?.type === 'elevenlabs' || 
-      (ttsWebhookId !== 'browser' && activeWebhook?.apiKey);
+    // Check if we should use ElevenLabs (when ttsWebhookId is set to a webhook ID, not 'browser')
+    const ttsWebhook = ttsWebhookId && ttsWebhookId !== 'browser' 
+      ? settings.webhooks?.find(w => w.id === ttsWebhookId) 
+      : null;
     
-    if (shouldUseElevenLabs && activeWebhook?.apiKey) {
+    console.log('[Gemini Live] TTS setting:', ttsWebhookId, 'Webhook:', ttsWebhook?.name);
+    
+    if (ttsWebhook?.type === 'elevenlabs') {
       try {
         console.log('[Gemini Live] Using ElevenLabs TTS');
         
@@ -112,7 +113,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
               apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
               Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
             },
-            body: JSON.stringify({ text, voiceId: activeWebhook.agentId }),
+            body: JSON.stringify({ text, voiceId: ttsWebhook.agentId }),
           }
         );
 
@@ -212,7 +213,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
         window.speechSynthesis.speak(utterance);
       }, 100);
     });
-  }, [isActive, updateState, settings.voice?.ttsWebhookId, getActiveWebhook]);
+  }, [isActive, updateState, settings.voice?.ttsWebhookId, settings.webhooks]);
 
   // Process transcript with Gemini
   const processTranscript = useCallback(async (transcript: string) => {
