@@ -9,7 +9,10 @@ import { useLifeManager } from '@/hooks/useLifeManager';
 import { useUnifiedVoice } from '@/hooks/useUnifiedVoice';
 import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
+import { useRules } from '@/hooks/useRules';
+import { useCameras } from '@/hooks/useCameras';
 import { useSettings } from '@/hooks/useSettings';
+import { useUserContext } from '@/hooks/useUserContext';
 import { toast } from 'sonner';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
@@ -24,7 +27,70 @@ export default function LifeManagerInterface() {
 
   const { tasks, getPendingTasks, getOverdueTasks } = useTasks();
   const { goals } = useGoals();
+  const { rules, getEnabledRules } = useRules();
+  const { cameras } = useCameras();
+  const { context: userContext } = useUserContext();
   const { getVoiceProviderConfig } = useSettings();
+  
+  // Build app context string for the AI to use
+  const getAppContext = useCallback(() => {
+    const pendingTasks = getPendingTasks();
+    const overdueTasks = getOverdueTasks();
+    const activeGoals = goals.filter(g => g.status === 'active');
+    const enabledRules = getEnabledRules();
+    const activeCameras = cameras.filter(c => c.is_active);
+    
+    const parts: string[] = [];
+    
+    // Current user context
+    if (userContext) {
+      parts.push(`### Current Status
+- Location: ${userContext.current_room || 'Unknown'}
+- Activity: ${userContext.current_activity || 'Unknown'}
+- Idle time: ${userContext.idle_minutes || 0} minutes
+- Tasks completed today: ${userContext.tasks_completed_today || 0}
+- Productive minutes today: ${userContext.productive_minutes_today || 0}`);
+    }
+    
+    // Tasks
+    if (pendingTasks.length > 0) {
+      const taskList = pendingTasks.slice(0, 10).map(t => 
+        `- [${t.priority}] ${t.title}${t.due_at ? ` (due: ${new Date(t.due_at).toLocaleString()})` : ''}${t.status === 'in_progress' ? ' [IN PROGRESS]' : ''}`
+      ).join('\n');
+      parts.push(`### Pending Tasks (${pendingTasks.length} total, ${overdueTasks.length} overdue)
+${taskList}`);
+    }
+    
+    // Goals
+    if (activeGoals.length > 0) {
+      const goalList = activeGoals.slice(0, 5).map(g => {
+        const progress = g.target_value ? Math.round(((g.current_value || 0) / g.target_value) * 100) : 0;
+        return `- ${g.title}: ${g.current_value || 0}/${g.target_value || 0} ${g.unit || ''} (${progress}%)${g.due_date ? ` - due ${new Date(g.due_date).toLocaleDateString()}` : ''}`;
+      }).join('\n');
+      parts.push(`### Active Goals
+${goalList}`);
+    }
+    
+    // Active rules summary
+    if (enabledRules.length > 0) {
+      const ruleList = enabledRules.slice(0, 5).map(r => 
+        `- ${r.name}: ${r.description || r.trigger_type}`
+      ).join('\n');
+      parts.push(`### Active Automation Rules (${enabledRules.length} total)
+${ruleList}`);
+    }
+    
+    // Cameras
+    if (activeCameras.length > 0) {
+      const cameraList = activeCameras.map(c => 
+        `- ${c.name}${c.room ? ` (${c.room})` : ''}`
+      ).join('\n');
+      parts.push(`### Active Cameras
+${cameraList}`);
+    }
+    
+    return parts.join('\n\n');
+  }, [getPendingTasks, getOverdueTasks, goals, getEnabledRules, cameras, userContext]);
   
   // Determine if we should use interactive conversation based on Voice Provider setting
   // Interactive = ElevenLabs Agent (has agentId) or any Conversational AI
@@ -48,7 +114,9 @@ export default function LifeManagerInterface() {
 You observe the home through sensors and conversation.
 Be concise, warm, and helpful - responses will be spoken aloud.
 Keep responses under 2 sentences when possible.
-Use natural, conversational language.`,
+Use natural, conversational language.
+You can discuss tasks, goals, rules, and home automation.`,
+    getAppContext, // Provide context to the AI
     onStateChange: (state) => {
       if (isActive && isConversationalMode) {
         if (state === 'idle') setSessionState('idle');
