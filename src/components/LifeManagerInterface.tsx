@@ -4,50 +4,90 @@ import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mic, MicOff, Settings, Loader2, Eye, Target, Clock } from 'lucide-react';
+import { Mic, MicOff, Settings, Loader2, Eye, Target, Clock, MessageSquare } from 'lucide-react';
 import { useLifeManager } from '@/hooks/useLifeManager';
+import { useUnifiedVoice } from '@/hooks/useUnifiedVoice';
 import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
 import { toast } from 'sonner';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
-type SessionState = 'idle' | 'observing' | 'processing' | 'intervening';
+type SessionState = 'idle' | 'observing' | 'processing' | 'intervening' | 'conversing';
 
 export default function LifeManagerInterface() {
   const navigate = useNavigate();
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [lastIntervention, setLastIntervention] = useState<string>('');
   const [observationLog, setObservationLog] = useState<string[]>([]);
+  const [conversationMode, setConversationMode] = useState(false);
 
   const { tasks, getPendingTasks, getOverdueTasks } = useTasks();
   const { goals } = useGoals();
+  
+  // Interactive voice conversation using settings-based provider
+  const unifiedVoice = useUnifiedVoice({
+    systemInstruction: `You are Cortana, an AI home guardian and personal assistant.
+You observe the home through sensors and conversation.
+Be concise, warm, and helpful - responses will be spoken aloud.
+Keep responses under 2 sentences when possible.
+Use natural, conversational language.`,
+    onStateChange: (state) => {
+      if (conversationMode) {
+        if (state === 'idle') setSessionState('idle');
+        else if (state === 'connecting' || state === 'processing') setSessionState('processing');
+        else if (state === 'listening') setSessionState('conversing');
+        else if (state === 'speaking') setSessionState('intervening');
+      }
+    },
+    onTranscript: (text, isFinal) => {
+      if (isFinal && text.trim()) {
+        setObservationLog(prev => [`You: "${text}"`, ...prev.slice(0, 9)]);
+      }
+    },
+    onResponse: (response) => {
+      setLastIntervention(response);
+      setObservationLog(prev => [`Cortana: "${response.slice(0, 100)}${response.length > 100 ? '...' : ''}"`, ...prev.slice(0, 9)]);
+    },
+    onError: (error) => {
+      console.error('[LifeManager] Voice error:', error);
+      toast.error('Voice error: ' + error);
+    },
+  });
   
   const lifeManager = useLifeManager({
     observationIntervalMs: 30000, // 30 seconds
     minInterventionGapMs: 60000, // 1 minute between interventions
     onIntervention: (message, severity) => {
-      setLastIntervention(message);
-      setSessionState('intervening');
-      
-      // Toast based on severity
-      if (severity === 'urgent') {
-        toast.error(message, { duration: 10000 });
-      } else if (severity === 'warning') {
-        toast.warning(message, { duration: 8000 });
-      } else if (severity === 'nudge') {
-        toast.info(message, { duration: 6000 });
+      if (!conversationMode) {
+        setLastIntervention(message);
+        setSessionState('intervening');
+        
+        // Toast based on severity
+        if (severity === 'urgent') {
+          toast.error(message, { duration: 10000 });
+        } else if (severity === 'warning') {
+          toast.warning(message, { duration: 8000 });
+        } else if (severity === 'nudge') {
+          toast.info(message, { duration: 6000 });
+        }
       }
     },
     onObservation: (observation) => {
-      setObservationLog(prev => [observation, ...prev.slice(0, 9)]);
+      if (!conversationMode) {
+        setObservationLog(prev => [observation, ...prev.slice(0, 9)]);
+      }
     },
     onSpeaking: (speaking) => {
-      setSessionState(speaking ? 'intervening' : 'observing');
+      if (!conversationMode) {
+        setSessionState(speaking ? 'intervening' : 'observing');
+      }
     },
   });
 
-  // Update session state
+  // Update session state based on life manager (when not in conversation mode)
   useEffect(() => {
+    if (conversationMode) return;
+    
     if (lifeManager.isSpeaking) {
       setSessionState('intervening');
     } else if (lifeManager.isProcessing) {
@@ -57,18 +97,52 @@ export default function LifeManagerInterface() {
     } else {
       setSessionState('idle');
     }
-  }, [lifeManager.isSpeaking, lifeManager.isProcessing, lifeManager.isActive]);
+  }, [lifeManager.isSpeaking, lifeManager.isProcessing, lifeManager.isActive, conversationMode]);
 
-  const handleStart = useCallback(async () => {
+  // Handle starting conversation mode (using Voice Provider setting)
+  const handleStartConversation = useCallback(async () => {
+    try {
+      // Stop life manager if running
+      if (lifeManager.isActive) {
+        lifeManager.stop();
+      }
+      
+      setConversationMode(true);
+      setSessionState('processing');
+      await unifiedVoice.start();
+      console.log('[LifeManager] Started conversation with provider:', unifiedVoice.providerName);
+    } catch (err) {
+      console.error('Failed to start conversation:', err);
+      toast.error('Failed to start voice conversation');
+      setConversationMode(false);
+      setSessionState('idle');
+    }
+  }, [lifeManager, unifiedVoice]);
+
+  // Handle stopping conversation mode
+  const handleStopConversation = useCallback(async () => {
+    try {
+      await unifiedVoice.stop();
+    } catch (err) {
+      console.error('Failed to stop conversation:', err);
+    }
+    setConversationMode(false);
+    setSessionState('idle');
+  }, [unifiedVoice]);
+
+  const handleStartObserving = useCallback(async () => {
+    if (conversationMode) {
+      await handleStopConversation();
+    }
     try {
       await lifeManager.start();
     } catch (err) {
       console.error('Failed to start:', err);
       toast.error('Failed to start life manager');
     }
-  }, [lifeManager]);
+  }, [lifeManager, conversationMode, handleStopConversation]);
 
-  const handleStop = useCallback(() => {
+  const handleStopObserving = useCallback(() => {
     lifeManager.stop();
   }, [lifeManager]);
 
@@ -77,6 +151,12 @@ export default function LifeManagerInterface() {
   const activeGoals = goals.filter(g => g.status === 'active');
 
   const getStatusText = () => {
+    if (conversationMode) {
+      if (unifiedVoice.state === 'listening') return `Listening... (${unifiedVoice.providerName})`;
+      if (unifiedVoice.state === 'speaking') return 'Speaking...';
+      if (unifiedVoice.state === 'processing' || unifiedVoice.state === 'connecting') return 'Processing...';
+      return 'Ready';
+    }
     switch (sessionState) {
       case 'observing':
         return 'Observing...';
@@ -84,6 +164,8 @@ export default function LifeManagerInterface() {
         return 'Analyzing...';
       case 'intervening':
         return 'Speaking...';
+      case 'conversing':
+        return 'Listening...';
       default:
         return 'Inactive';
     }
@@ -130,7 +212,7 @@ export default function LifeManagerInterface() {
           />
 
           {/* Active Observation Indicator */}
-          {sessionState === 'observing' && (
+          {sessionState === 'observing' && !conversationMode && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="relative">
                 <div className="w-32 h-32 rounded-full border border-ai-glow/30 animate-ping" style={{ animationDuration: '3s' }} />
@@ -141,8 +223,21 @@ export default function LifeManagerInterface() {
             </div>
           )}
 
-          {/* Glowing Ring when Intervening */}
-          <GlowingRing isActive={sessionState === 'intervening'} size={300} />
+          {/* Conversation Mode Indicator */}
+          {conversationMode && unifiedVoice.state === 'listening' && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative">
+                <div className="w-40 h-40 rounded-full border-2 border-voice-active/40 animate-pulse" />
+                <div className="absolute inset-4 w-32 h-32 rounded-full border border-voice-active/60 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Mic className="w-10 h-10 text-voice-active/70 animate-pulse" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Glowing Ring when Speaking/Intervening */}
+          <GlowingRing isActive={sessionState === 'intervening' || unifiedVoice.state === 'speaking'} size={300} />
 
           {/* Last Intervention Display */}
           {lastIntervention && sessionState !== 'intervening' && (
@@ -157,17 +252,26 @@ export default function LifeManagerInterface() {
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
             <div
               className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-300 bg-gradient-card/95 backdrop-blur-sm ${
-                sessionState === 'observing' ? 'text-ai-glow border-ai-glow/50' :
-                sessionState === 'processing' ? 'text-ai-pulse border-ai-pulse animate-pulse' :
-                sessionState === 'intervening' ? 'text-voice-active border-voice-active' :
-                'text-muted-foreground border-border'
+                conversationMode ? (
+                  unifiedVoice.state === 'listening' ? 'text-voice-active border-voice-active' :
+                  unifiedVoice.state === 'speaking' ? 'text-ai-glow border-ai-glow' :
+                  'text-ai-pulse border-ai-pulse animate-pulse'
+                ) : (
+                  sessionState === 'observing' ? 'text-ai-glow border-ai-glow/50' :
+                  sessionState === 'processing' ? 'text-ai-pulse border-ai-pulse animate-pulse' :
+                  sessionState === 'intervening' ? 'text-voice-active border-voice-active' :
+                  'text-muted-foreground border-border'
+                )
               }`}
             >
-              {sessionState === 'processing' && (
+              {(sessionState === 'processing' || unifiedVoice.state === 'connecting') && (
                 <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
               )}
-              {sessionState === 'observing' && (
+              {sessionState === 'observing' && !conversationMode && (
                 <Eye className="w-4 h-4 inline mr-2" />
+              )}
+              {conversationMode && unifiedVoice.state === 'listening' && (
+                <Mic className="w-4 h-4 inline mr-2 animate-pulse" />
               )}
               {getStatusText()}
             </div>
@@ -175,29 +279,57 @@ export default function LifeManagerInterface() {
 
           {/* Control Panel */}
           <div className="absolute bottom-4 right-4">
-            <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-6">
-              <div className="flex flex-col items-center space-y-4">
-                <Button
-                  onClick={lifeManager.isActive ? handleStop : handleStart}
-                  className={`w-20 h-20 rounded-full border-2 transition-all duration-300 ${
-                    lifeManager.isActive
-                      ? 'bg-voice-active border-voice-active hover:bg-voice-active/80'
-                      : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
-                  }`}
-                >
-                  {lifeManager.isActive ? (
-                    <MicOff className="w-8 h-8" />
-                  ) : (
-                    <Eye className="w-8 h-8" />
-                  )}
-                </Button>
+            <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-4">
+              <div className="flex items-center gap-4">
+                {/* Voice Conversation Button */}
+                <div className="flex flex-col items-center space-y-2">
+                  <Button
+                    onClick={conversationMode || unifiedVoice.isActive ? handleStopConversation : handleStartConversation}
+                    className={`w-16 h-16 rounded-full border-2 transition-all duration-300 ${
+                      conversationMode || unifiedVoice.isActive
+                        ? 'bg-voice-active border-voice-active hover:bg-voice-active/80'
+                        : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
+                    }`}
+                  >
+                    {conversationMode || unifiedVoice.isActive ? (
+                      <MicOff className="w-6 h-6" />
+                    ) : (
+                      <Mic className="w-6 h-6" />
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {conversationMode ? 'End Chat' : 'Talk'}
+                  </p>
+                </div>
 
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    {lifeManager.isActive ? 'Stop Manager' : 'Start Life Manager'}
+                {/* Life Manager Observer Button */}
+                <div className="flex flex-col items-center space-y-2">
+                  <Button
+                    onClick={lifeManager.isActive ? handleStopObserving : handleStartObserving}
+                    disabled={conversationMode}
+                    className={`w-16 h-16 rounded-full border-2 transition-all duration-300 ${
+                      lifeManager.isActive
+                        ? 'bg-ai-glow/50 border-ai-glow hover:bg-ai-glow/30'
+                        : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
+                    } ${conversationMode ? 'opacity-50' : ''}`}
+                  >
+                    <Eye className="w-6 h-6" />
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {lifeManager.isActive ? 'Stop' : 'Observe'}
                   </p>
                 </div>
               </div>
+              
+              {/* Provider indicator */}
+              {(conversationMode || unifiedVoice.isActive) && (
+                <div className="mt-3 text-center">
+                  <Badge variant="outline" className="text-xs border-ai-glow/50 text-ai-glow">
+                    <MessageSquare className="w-3 h-3 mr-1" />
+                    {unifiedVoice.providerName}
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
 
