@@ -61,11 +61,11 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
   const { tasks, refetch: refetchTasks } = useTasks();
   const { context, updateContext } = useUserContext();
   const { cameras } = useCameras();
-  const { settings, getWebhookById } = useSettings();
+  const { settings, getVoiceProviderConfig } = useSettings();
   
-  // Get TTS webhook from current voice provider setting
-  const voiceProvider = settings.voice?.provider;
-  const ttsWebhook = voiceProvider ? getWebhookById(voiceProvider) : null;
+  // Get TTS webhook from voice provider config (handles both webhooks and conversational AIs)
+  const providerConfig = getVoiceProviderConfig();
+  const ttsWebhook = providerConfig.ttsWebhook || null;
   const sttWebhook = null; // STT is always browser-based for now
   
   // Use voice services with current settings

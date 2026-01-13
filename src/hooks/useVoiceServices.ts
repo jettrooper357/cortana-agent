@@ -89,11 +89,24 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
       throw new Error('Browser does not support speech synthesis');
     }
 
-    // Cancel any ongoing speech first
-    window.speechSynthesis.cancel();
-    
-    // Small delay to ensure cancel is processed
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Wait for any ongoing speech to finish instead of canceling
+    if (window.speechSynthesis.speaking) {
+      console.log('[Browser TTS] Waiting for current speech to finish...');
+      await new Promise<void>((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!window.speechSynthesis.speaking) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 100);
+        // Timeout after 30 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          window.speechSynthesis.cancel();
+          resolve();
+        }, 30000);
+      });
+    }
 
     // Wait for voices to be loaded
     const voices = await getVoicesAsync();
@@ -176,6 +189,13 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
 
   // ElevenLabs TTS - now accepts webhook config
   const speakWithElevenLabs = useCallback(async (text: string, webhook?: WebhookSettings | null): Promise<void> => {
+    // Use voiceId for TTS, fall back to agentId for legacy support
+    const voiceIdForTTS = webhook?.voiceId || webhook?.agentId;
+    
+    if (!voiceIdForTTS) {
+      console.warn('[ElevenLabs TTS] No voice ID configured, falling back to default');
+    }
+    
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
@@ -189,7 +209,7 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
           body: JSON.stringify({ 
             text, 
             apiKey: webhook?.apiKey,
-            voiceId: webhook?.agentId, // Use agentId as voiceId for TTS
+            voiceId: voiceIdForTTS, // Use proper voiceId
           }),
         }
       );
