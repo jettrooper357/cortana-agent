@@ -189,11 +189,13 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
 
   // ElevenLabs TTS - now accepts webhook config
   const speakWithElevenLabs = useCallback(async (text: string, webhook?: WebhookSettings | null): Promise<void> => {
-    // Use voiceId for TTS, fall back to agentId for legacy support
-    const voiceIdForTTS = webhook?.voiceId || webhook?.agentId;
+    // ONLY use voiceId for TTS - agentId is for Conversational AI, not TTS
+    // Agent IDs look like "agent_01..." and will fail with 404 on the TTS endpoint
+    const voiceIdForTTS = webhook?.voiceId;
     
     if (!voiceIdForTTS) {
-      console.warn('[ElevenLabs TTS] No voice ID configured, falling back to default');
+      console.warn('[ElevenLabs TTS] No voice ID configured, falling back to browser TTS');
+      throw new Error('No voice ID configured for ElevenLabs TTS');
     }
     
     try {
