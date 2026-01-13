@@ -22,8 +22,8 @@ interface UnifiedVoiceConfig {
  * The mode is determined by the conversationProvider setting.
  */
 export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
-  const { settings, getConversationConfig, getWebhookById } = useSettings();
-  const [activeMode, setActiveMode] = useState<'gemini' | 'elevenlabs-agent'>('gemini');
+  const { settings, getVoiceProviderConfig, getWebhookById, getConversationalAIById } = useSettings();
+  const [activeMode, setActiveMode] = useState<'gemini' | 'elevenlabs-agent' | 'browser'>('gemini');
   
   // ElevenLabs agent conversation hook
   const elevenLabsConversation = useConversation({
@@ -59,13 +59,15 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
   
   // Determine which mode to use based on settings
   useEffect(() => {
-    const conversationConfig = getConversationConfig();
-    if (conversationConfig.type === 'gemini') {
+    const providerConfig = getVoiceProviderConfig();
+    if (providerConfig.type === 'browser') {
+      setActiveMode('browser');
+    } else if (providerConfig.type === 'conversational-ai') {
       setActiveMode('gemini');
-    } else if (conversationConfig.type === 'webhook') {
+    } else if (providerConfig.type === 'webhook') {
       setActiveMode('elevenlabs-agent');
     }
-  }, [settings.voice.conversationProvider, getConversationConfig]);
+  }, [settings.voice.provider, getVoiceProviderConfig]);
   
   // Unified state
   const getState = useCallback((): UnifiedSessionState => {
@@ -81,16 +83,21 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
   
   // Unified start
   const start = useCallback(async () => {
-    const conversationConfig = getConversationConfig();
-    console.log('[UnifiedVoice] Starting with mode:', conversationConfig.type);
+    const providerConfig = getVoiceProviderConfig();
+    console.log('[UnifiedVoice] Starting with mode:', providerConfig.type);
     
-    if (conversationConfig.type === 'gemini') {
+    if (providerConfig.type === 'browser') {
+      setActiveMode('browser');
+      // Use browser TTS only (no AI)
+      toast.info('Browser mode active - no AI conversation');
+      config.onStateChange?.('listening');
+    } else if (providerConfig.type === 'conversational-ai') {
       setActiveMode('gemini');
       await geminiAudio.start();
-    } else if (conversationConfig.type === 'webhook' && conversationConfig.webhook) {
+    } else if (providerConfig.type === 'webhook' && providerConfig.webhook) {
       setActiveMode('elevenlabs-agent');
       
-      const webhook = conversationConfig.webhook;
+      const webhook = providerConfig.webhook;
       if (!webhook.agentId) {
         toast.error('ElevenLabs agent ID not configured');
         config.onError?.('ElevenLabs agent ID not configured');
@@ -111,7 +118,7 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
         config.onStateChange?.('idle');
       }
     }
-  }, [getConversationConfig, geminiAudio, elevenLabsConversation, config]);
+  }, [getVoiceProviderConfig, geminiAudio, elevenLabsConversation, config]);
   
   // Unified stop
   const stop = useCallback(async () => {

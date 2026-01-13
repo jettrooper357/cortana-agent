@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSettings, WebhookSettings } from '@/hooks/useSettings';
+import { useSettings, WebhookSettings, ConversationalAISettings, ConversationalAIType } from '@/hooks/useSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon, Volume2, Mic, ChevronDown, Bot, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon, Volume2, Mic, ChevronDown, Bot, Sparkles, Brain } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,16 +25,36 @@ const webhookSchema = z.object({
   isActive: z.boolean().default(false)
 });
 
+const conversationalAISchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  type: z.enum(['gemini', 'chatgpt', 'claude', 'custom']),
+  apiKey: z.string().optional(),
+  model: z.string().optional(),
+  isActive: z.boolean().default(false)
+});
+
 type WebhookFormData = z.infer<typeof webhookSchema>;
+type ConversationalAIFormData = z.infer<typeof conversationalAISchema>;
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { settings, saveWebhook, deleteWebhook, clearAllSettings, updateVoiceSettings } = useSettings();
+  const { 
+    settings, 
+    saveWebhook, 
+    deleteWebhook, 
+    saveConversationalAI, 
+    deleteConversationalAI,
+    clearAllSettings, 
+    updateVoiceSettings 
+  } = useSettings();
   const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState<string | null>(null);
+  
+  const [isEditingWebhook, setIsEditingWebhook] = useState<string | null>(null);
+  const [isEditingAI, setIsEditingAI] = useState<string | null>(null);
   const [isWebhookFormOpen, setIsWebhookFormOpen] = useState(false);
+  const [isAIFormOpen, setIsAIFormOpen] = useState(false);
 
-  const form = useForm<WebhookFormData>({
+  const webhookForm = useForm<WebhookFormData>({
     resolver: zodResolver(webhookSchema),
     defaultValues: {
       name: '',
@@ -46,9 +66,20 @@ export default function Settings() {
     }
   });
 
-  const handleSubmit = (data: WebhookFormData) => {
+  const aiForm = useForm<ConversationalAIFormData>({
+    resolver: zodResolver(conversationalAISchema),
+    defaultValues: {
+      name: '',
+      type: 'gemini',
+      apiKey: '',
+      model: '',
+      isActive: false
+    }
+  });
+
+  // Submit webhook
+  const handleWebhookSubmit = (data: WebhookFormData) => {
     try {
-      // Enhanced validation
       if (data.type === 'elevenlabs' && !data.agentId?.trim()) {
         toast({
           title: "Validation Error",
@@ -77,7 +108,7 @@ export default function Settings() {
       }
       
       const webhook: WebhookSettings = {
-        id: isEditing || crypto.randomUUID(),
+        id: isEditingWebhook || crypto.randomUUID(),
         name: data.name,
         type: data.type,
         agentId: data.agentId,
@@ -86,16 +117,15 @@ export default function Settings() {
         isActive: data.isActive
       };
       
-      console.log('Saving webhook:', webhook);
       saveWebhook(webhook);
       
       toast({
-        title: isEditing ? 'Webhook updated' : 'Webhook added',
-        description: `${data.name} has been ${isEditing ? 'updated' : 'added'} successfully.`
+        title: isEditingWebhook ? 'Webhook updated' : 'Webhook added',
+        description: `${data.name} has been ${isEditingWebhook ? 'updated' : 'added'} successfully.`
       });
       
-      setIsEditing(null);
-      form.reset();
+      setIsEditingWebhook(null);
+      webhookForm.reset();
     } catch (error) {
       console.error('Error saving webhook:', error);
       toast({
@@ -106,9 +136,51 @@ export default function Settings() {
     }
   };
 
-  const handleEdit = (webhook: WebhookSettings) => {
-    setIsEditing(webhook.id);
-    form.reset({
+  // Submit conversational AI
+  const handleAISubmit = (data: ConversationalAIFormData) => {
+    try {
+      // ChatGPT and Claude require API keys
+      if ((data.type === 'chatgpt' || data.type === 'claude') && !data.apiKey?.trim()) {
+        toast({
+          title: "Validation Error",
+          description: `API Key is required for ${data.type === 'chatgpt' ? 'ChatGPT' : 'Claude'}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const ai: ConversationalAISettings = {
+        id: isEditingAI || crypto.randomUUID(),
+        name: data.name,
+        type: data.type as ConversationalAIType,
+        apiKey: data.apiKey,
+        model: data.model,
+        isActive: data.isActive
+      };
+      
+      saveConversationalAI(ai);
+      
+      toast({
+        title: isEditingAI ? 'AI updated' : 'AI added',
+        description: `${data.name} has been ${isEditingAI ? 'updated' : 'added'} successfully.`
+      });
+      
+      setIsEditingAI(null);
+      aiForm.reset();
+      setIsAIFormOpen(false);
+    } catch (error) {
+      console.error('Error saving AI:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save AI configuration. Please try again.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleEditWebhook = (webhook: WebhookSettings) => {
+    setIsEditingWebhook(webhook.id);
+    webhookForm.reset({
       name: webhook.name,
       type: webhook.type,
       agentId: webhook.agentId || '',
@@ -116,13 +188,50 @@ export default function Settings() {
       webhookUrl: webhook.webhookUrl || '',
       isActive: webhook.isActive
     });
+    setIsWebhookFormOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleEditAI = (ai: ConversationalAISettings) => {
+    if (ai.id === 'gemini-default') {
+      toast({
+        title: "Cannot edit",
+        description: "The default Gemini AI cannot be edited.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsEditingAI(ai.id);
+    aiForm.reset({
+      name: ai.name,
+      type: ai.type,
+      apiKey: ai.apiKey || '',
+      model: ai.model || '',
+      isActive: ai.isActive
+    });
+    setIsAIFormOpen(true);
+  };
+
+  const handleDeleteWebhook = (id: string) => {
     deleteWebhook(id);
     toast({
       title: 'Webhook deleted',
       description: 'The webhook has been removed successfully.'
+    });
+  };
+
+  const handleDeleteAI = (id: string) => {
+    if (id === 'gemini-default') {
+      toast({
+        title: "Cannot delete",
+        description: "The default Gemini AI cannot be deleted.",
+        variant: "destructive",
+      });
+      return;
+    }
+    deleteConversationalAI(id);
+    toast({
+      title: 'AI removed',
+      description: 'The conversational AI has been removed successfully.'
     });
   };
 
@@ -134,13 +243,25 @@ export default function Settings() {
     });
   };
 
-  const watchedType = form.watch('type');
+  const watchedWebhookType = webhookForm.watch('type');
+  const watchedAIType = aiForm.watch('type');
 
-  // Get ElevenLabs webhooks for TTS selection
-  const elevenlabsWebhooks = settings.webhooks.filter(w => w.type === 'elevenlabs');
-  
-  // Get webhooks that can be used for conversation (ElevenLabs agents)
-  const conversationWebhooks = settings.webhooks.filter(w => w.type === 'elevenlabs' || w.type === 'openai');
+  // Build unified voice provider options
+  const voiceProviderOptions = [
+    { id: 'browser', name: 'Browser (Free)', description: 'Built-in browser TTS/STT only', type: 'browser' },
+    ...settings.conversationalAIs.map(ai => ({
+      id: ai.id,
+      name: ai.name,
+      description: ai.type === 'gemini' ? 'Lovable AI (no API key needed)' : `${ai.type.toUpperCase()} AI`,
+      type: 'ai'
+    })),
+    ...settings.webhooks.filter(w => w.type === 'elevenlabs').map(w => ({
+      id: w.id,
+      name: w.name,
+      description: 'ElevenLabs Conversational Agent',
+      type: 'webhook'
+    })),
+  ];
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -161,168 +282,272 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Conversation AI Settings */}
+        {/* Voice Provider Selection - SINGLE DROPDOWN */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5" />
-              Conversation AI
+              <Volume2 className="h-5 w-5" />
+              Voice Provider
             </CardTitle>
             <CardDescription>
-              Select which AI powers Cortana's conversations
+              Select how Cortana should speak and listen
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent>
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                AI Provider
+                <Mic className="h-4 w-4" />
+                Active Provider
               </Label>
               <Select
-                value={settings.voice?.conversationProvider || 'gemini'}
+                value={settings.voice?.provider || 'gemini-default'}
                 onValueChange={(value: string) => {
-                  updateVoiceSettings({ conversationProvider: value });
-                  const providerName = value === 'gemini' 
-                    ? 'Gemini AI' 
-                    : settings.webhooks.find(w => w.id === value)?.name || 'selected service';
+                  updateVoiceSettings({ provider: value });
+                  const option = voiceProviderOptions.find(o => o.id === value);
                   toast({
-                    title: 'Conversation AI Updated',
-                    description: `Now using ${providerName} for conversations`,
+                    title: 'Voice Provider Updated',
+                    description: `Now using ${option?.name || 'selected provider'}`,
                   });
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select AI provider" />
+                  <SelectValue placeholder="Select voice provider" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gemini">
-                    <div className="flex flex-col items-start">
-                      <span>Gemini AI</span>
-                      <span className="text-xs text-muted-foreground">Lovable Cloud AI (built-in, no API key needed)</span>
-                    </div>
-                  </SelectItem>
-                  {conversationWebhooks.map((webhook) => (
-                    <SelectItem key={webhook.id} value={webhook.id}>
+                  {voiceProviderOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
                       <div className="flex flex-col items-start">
-                        <span>{webhook.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {webhook.type === 'elevenlabs' ? 'ElevenLabs Conversational Agent' : 'OpenAI Agent'}
-                        </span>
+                        <span>{option.name}</span>
+                        <span className="text-xs text-muted-foreground">{option.description}</span>
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Gemini uses browser speech recognition + Gemini AI + your TTS choice. 
-                ElevenLabs agents provide full conversational AI with premium voices.
+              <p className="text-xs text-muted-foreground mt-2">
+                Add more options below in "Conversational AI" or "Webhooks" sections
               </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Voice Settings */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Volume2 className="h-5 w-5" />
-              Voice Settings
-            </CardTitle>
-            <CardDescription>
-              Configure text-to-speech and speech-to-text (used with Gemini AI mode)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Volume2 className="h-4 w-4" />
-                  Text-to-Speech
-                </Label>
-                <Select
-                  value={settings.voice?.ttsProvider || 'browser'}
-                  onValueChange={(value: string) => {
-                    updateVoiceSettings({ ttsProvider: value });
-                    const providerName = value === 'browser' 
-                      ? 'Browser (free)' 
-                      : settings.webhooks.find(w => w.id === value)?.name || 'selected service';
-                    toast({
-                      title: 'TTS Updated',
-                      description: `Now using ${providerName} for text-to-speech`,
-                    });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select TTS provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="browser">
-                      <div className="flex flex-col items-start">
-                        <span>Browser (Free)</span>
-                        <span className="text-xs text-muted-foreground">Built-in browser voices</span>
-                      </div>
-                    </SelectItem>
-                    {elevenlabsWebhooks.map((webhook) => (
-                      <SelectItem key={webhook.id} value={webhook.id}>
-                        <div className="flex flex-col items-start">
-                          <span>{webhook.name}</span>
-                          <span className="text-xs text-muted-foreground">ElevenLabs TTS (high quality)</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Only applies when using Gemini AI mode
-                </p>
-              </div>
+        {/* Conversational AI Setup */}
+        <Collapsible open={isAIFormOpen || !!isEditingAI} onOpenChange={setIsAIFormOpen}>
+          <Card className="mb-8">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Brain className="h-5 w-5" />
+                      {isEditingAI ? 'Edit Conversational AI' : 'Add Conversational AI'}
+                    </CardTitle>
+                    <CardDescription>
+                      Configure AI models like Gemini, ChatGPT, Claude
+                    </CardDescription>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${isAIFormOpen || isEditingAI ? 'rotate-180' : ''}`} />
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <Form {...aiForm}>
+                  <form onSubmit={aiForm.handleSubmit(handleAISubmit)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={aiForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="My ChatGPT" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              A friendly name for this AI
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Mic className="h-4 w-4" />
-                  Speech-to-Text
-                </Label>
-                <Select
-                  value={settings.voice?.sttProvider || 'browser'}
-                  onValueChange={(value: string) => {
-                    updateVoiceSettings({ sttProvider: value });
-                    const providerName = value === 'browser' ? 'Browser (free)' : 'selected service';
-                    toast({
-                      title: 'STT Updated',
-                      description: `Now using ${providerName} for speech recognition`,
-                    });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select STT provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="browser">
-                      <div className="flex flex-col items-start">
-                        <span>Browser (Free)</span>
-                        <span className="text-xs text-muted-foreground">Built-in browser speech recognition</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Only applies when using Gemini AI mode
-                </p>
-              </div>
-            </div>
+                      <FormField
+                        control={aiForm.control}
+                        name="type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>AI Type</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select AI type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="gemini">Gemini (Lovable AI - Free)</SelectItem>
+                                <SelectItem value="chatgpt">ChatGPT (Requires API Key)</SelectItem>
+                                <SelectItem value="claude">Claude (Requires API Key)</SelectItem>
+                                <SelectItem value="custom">Custom</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Choose the AI provider
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-            {settings.webhooks.length === 0 && (
-              <div className="p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  <strong>No webhooks configured.</strong> Add a webhook below to enable premium AI voices from ElevenLabs or conversational agents.
-                </p>
+                      {(watchedAIType === 'chatgpt' || watchedAIType === 'claude' || watchedAIType === 'custom') && (
+                        <FormField
+                          control={aiForm.control}
+                          name="apiKey"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>API Key</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="sk-..." {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                Your API key for this provider
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      <FormField
+                        control={aiForm.control}
+                        name="model"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Model (Optional)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="gpt-4, claude-3-opus, etc." {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              Override the default model
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={aiForm.control}
+                        name="isActive"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">Active</FormLabel>
+                              <FormDescription>
+                                Set as the active AI
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex gap-4">
+                      <Button type="submit">
+                        {isEditingAI ? 'Update AI' : 'Add AI'}
+                      </Button>
+                      {isEditingAI && (
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => {
+                            setIsEditingAI(null);
+                            aiForm.reset();
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+                </Form>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Configured Conversational AIs */}
+        {settings.conversationalAIs.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                Configured AI Models
+              </CardTitle>
+              <CardDescription>
+                Manage your conversational AI configurations
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {settings.conversationalAIs.map((ai) => (
+                  <div key={ai.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium">{ai.name}</h3>
+                        {ai.id === 'gemini-default' && (
+                          <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded-full">
+                            Default
+                          </span>
+                        )}
+                        {settings.voice?.provider === ai.id && (
+                          <span className="px-2 py-0.5 text-xs bg-ai-glow/20 text-ai-glow rounded-full">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {ai.type === 'gemini' && 'Gemini AI (Lovable Cloud)'}
+                        {ai.type === 'chatgpt' && 'ChatGPT'}
+                        {ai.type === 'claude' && 'Claude'}
+                        {ai.type === 'custom' && 'Custom AI'}
+                        {ai.model && ` • Model: ${ai.model}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {ai.id !== 'gemini-default' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditAI(ai)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => handleDeleteAI(ai.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Webhook Configuration */}
-        <Collapsible open={isWebhookFormOpen || !!isEditing} onOpenChange={setIsWebhookFormOpen}>
+        <Collapsible open={isWebhookFormOpen || !!isEditingWebhook} onOpenChange={setIsWebhookFormOpen}>
           <Card className="mb-8">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
@@ -330,23 +555,23 @@ export default function Settings() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Plus className="h-5 w-5" />
-                      {isEditing ? 'Edit Webhook' : 'Add New Webhook'}
+                      {isEditingWebhook ? 'Edit Webhook' : 'Add Webhook'}
                     </CardTitle>
                     <CardDescription>
-                      Configure your AI voice assistant connections
+                      Configure ElevenLabs agents and other voice webhooks
                     </CardDescription>
                   </div>
-                  <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${isWebhookFormOpen || isEditing ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${isWebhookFormOpen || isEditingWebhook ? 'rotate-180' : ''}`} />
                 </div>
               </CardHeader>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                <Form {...webhookForm}>
+                  <form onSubmit={webhookForm.handleSubmit(handleWebhookSubmit)} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField
-                        control={form.control}
+                        control={webhookForm.control}
                         name="name"
                         render={({ field }) => (
                           <FormItem>
@@ -363,12 +588,12 @@ export default function Settings() {
                       />
 
                       <FormField
-                        control={form.control}
+                        control={webhookForm.control}
                         name="type"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Type</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select webhook type" />
@@ -388,9 +613,9 @@ export default function Settings() {
                         )}
                       />
 
-                      {watchedType === 'elevenlabs' && (
+                      {watchedWebhookType === 'elevenlabs' && (
                         <FormField
-                          control={form.control}
+                          control={webhookForm.control}
                           name="agentId"
                           render={({ field }) => (
                             <FormItem>
@@ -407,9 +632,9 @@ export default function Settings() {
                         />
                       )}
 
-                      {watchedType === 'openai' && (
+                      {watchedWebhookType === 'openai' && (
                         <FormField
-                          control={form.control}
+                          control={webhookForm.control}
                           name="agentId"
                           render={({ field }) => (
                             <FormItem>
@@ -426,9 +651,9 @@ export default function Settings() {
                         />
                       )}
 
-                      {watchedType === 'custom' && (
+                      {watchedWebhookType === 'custom' && (
                         <FormField
-                          control={form.control}
+                          control={webhookForm.control}
                           name="webhookUrl"
                           render={({ field }) => (
                             <FormItem>
@@ -446,7 +671,7 @@ export default function Settings() {
                       )}
 
                       <FormField
-                        control={form.control}
+                        control={webhookForm.control}
                         name="isActive"
                         render={({ field }) => (
                           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
@@ -469,15 +694,15 @@ export default function Settings() {
 
                     <div className="flex gap-4">
                       <Button type="submit">
-                        {isEditing ? 'Update Webhook' : 'Add Webhook'}
+                        {isEditingWebhook ? 'Update Webhook' : 'Add Webhook'}
                       </Button>
-                      {isEditing && (
+                      {isEditingWebhook && (
                         <Button 
                           type="button" 
                           variant="outline" 
                           onClick={() => {
-                            setIsEditing(null);
-                            form.reset();
+                            setIsEditingWebhook(null);
+                            webhookForm.reset();
                           }}
                         >
                           Cancel
@@ -507,7 +732,7 @@ export default function Settings() {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium">{webhook.name}</h3>
-                        {webhook.isActive && (
+                        {settings.voice?.provider === webhook.id && (
                           <span className="px-2 py-0.5 text-xs bg-ai-glow/20 text-ai-glow rounded-full">
                             Active
                           </span>
@@ -524,17 +749,14 @@ export default function Settings() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          handleEdit(webhook);
-                          setIsWebhookFormOpen(true);
-                        }}
+                        onClick={() => handleEditWebhook(webhook)}
                       >
                         Edit
                       </Button>
                       <Button
                         variant="destructive"
                         size="icon"
-                        onClick={() => handleDelete(webhook.id)}
+                        onClick={() => handleDeleteWebhook(webhook.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
