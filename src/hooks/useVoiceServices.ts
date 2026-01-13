@@ -250,14 +250,13 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
     }
   }, []);
 
-  // Main speak function - uses webhook config to determine provider
-  // Using ref to check if already speaking to avoid interruptions
+  // Main speak function - always tries the configured provider, falls back to browser on ANY error
   const speak = useCallback(async (text: string): Promise<void> => {
     if (!text.trim()) return;
     
     // Prevent multiple simultaneous speak calls
     if (isSpeakingRef.current) {
-      console.log('[TTS] Already speaking, queuing or skipping');
+      console.log('[TTS] Already speaking, skipping');
       return;
     }
     
@@ -265,29 +264,25 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
     setError(null);
     
     try {
-      // If we have a TTS webhook configured, use it based on type
-      if (ttsWebhook) {
-        if (ttsWebhook.type === 'elevenlabs') {
-          await speakWithElevenLabs(text, ttsWebhook);
-        } else {
-          // For other webhook types, fall back to browser for now
-          await speakWithBrowser(text);
-        }
+      // Try ElevenLabs TTS if we have a webhook with a voiceId configured
+      if (ttsWebhook?.type === 'elevenlabs' && ttsWebhook.voiceId) {
+        console.log('[TTS] Attempting ElevenLabs with voiceId:', ttsWebhook.voiceId);
+        await speakWithElevenLabs(text, ttsWebhook);
       } else {
+        // No ElevenLabs voiceId configured - use browser TTS
+        console.log('[TTS] Using browser TTS (no ElevenLabs voiceId configured)');
         await speakWithBrowser(text);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'TTS failed';
+      console.warn('[TTS] Primary TTS failed, falling back to browser:', errorMsg);
       setError(errorMsg);
       
-      // Fallback to browser if webhook TTS fails
-      if (ttsWebhook) {
-        console.warn(`${ttsWebhook.name} TTS failed, falling back to browser:`, err);
-        try {
-          await speakWithBrowser(text);
-        } catch (fallbackErr) {
-          console.error('Browser TTS fallback also failed:', fallbackErr);
-        }
+      // Always fallback to browser TTS on any error
+      try {
+        await speakWithBrowser(text);
+      } catch (fallbackErr) {
+        console.error('[TTS] Browser TTS fallback also failed:', fallbackErr);
       }
     } finally {
       isSpeakingRef.current = false;
