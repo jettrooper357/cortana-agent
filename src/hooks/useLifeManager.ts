@@ -63,13 +63,10 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
   const { cameras } = useCameras();
   const { settings, getWebhookById } = useSettings();
   
-  // Get the configured webhook objects
-  const ttsWebhook = settings.voice?.ttsProvider && settings.voice.ttsProvider !== 'browser' && settings.voice.ttsProvider !== 'gemini'
-    ? getWebhookById(settings.voice.ttsProvider) 
-    : null;
-  const sttWebhook = settings.voice?.sttProvider && settings.voice.sttProvider !== 'browser' && settings.voice.sttProvider !== 'gemini'
-    ? getWebhookById(settings.voice.sttProvider)
-    : null;
+  // Get TTS webhook from current voice provider setting
+  const voiceProvider = settings.voice?.provider;
+  const ttsWebhook = voiceProvider ? getWebhookById(voiceProvider) : null;
+  const sttWebhook = null; // STT is always browser-based for now
   
   // Use voice services with current settings
   const voiceServices = useVoiceServices({

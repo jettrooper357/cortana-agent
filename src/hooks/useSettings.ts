@@ -4,9 +4,7 @@ import { useAuth } from './useAuth';
 import type { Json } from '@/integrations/supabase/types';
 
 export type WebhookType = 'elevenlabs' | 'openai' | 'custom';
-
-// Voice provider types - these are the main options users can select
-export type VoiceProvider = 'browser' | 'gemini' | string; // string for webhook IDs
+export type ConversationalAIType = 'gemini' | 'chatgpt' | 'claude' | 'custom';
 
 export interface WebhookSettings {
   id: string;
@@ -18,30 +16,43 @@ export interface WebhookSettings {
   isActive: boolean;
 }
 
-// Voice settings now reference providers
-// 'browser' = use browser APIs
-// 'gemini' = use Gemini AI for conversation + browser/elevenlabs for TTS
-// webhook ID = use that specific webhook (e.g., ElevenLabs conversational agent)
+// Conversational AI configuration (like webhooks but for AI models)
+export interface ConversationalAISettings {
+  id: string;
+  name: string;
+  type: ConversationalAIType;
+  apiKey?: string; // Optional - some don't need it (e.g., Gemini via Lovable)
+  model?: string; // Optional model override
+  isActive: boolean;
+}
+
+// Voice settings - single provider selection
+// Provider can be: 'browser', conversational AI ID, or webhook ID
 export interface VoiceSettings {
-  ttsProvider: VoiceProvider; // 'browser', 'gemini', or webhook ID for TTS
-  sttProvider: VoiceProvider; // 'browser', 'gemini', or webhook ID for STT
-  conversationProvider: VoiceProvider; // 'gemini' or webhook ID for conversation AI
+  provider: string; // 'browser' or an ID from conversationalAIs or webhooks
 }
 
 export interface AppSettings {
   webhooks: WebhookSettings[];
+  conversationalAIs: ConversationalAISettings[];
   defaultWebhook?: string;
   voice: VoiceSettings;
 }
 
+const DEFAULT_GEMINI_AI: ConversationalAISettings = {
+  id: 'gemini-default',
+  name: 'Gemini AI',
+  type: 'gemini',
+  isActive: true,
+};
+
 const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
-  ttsProvider: 'browser',
-  sttProvider: 'browser',
-  conversationProvider: 'gemini',
+  provider: 'gemini-default', // Default to built-in Gemini
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
   webhooks: [],
+  conversationalAIs: [DEFAULT_GEMINI_AI],
   defaultWebhook: undefined,
   voice: DEFAULT_VOICE_SETTINGS,
 };
@@ -52,21 +63,27 @@ const SETTINGS_KEY = 'cortana-app-settings';
 function migrateVoiceSettings(oldVoice: any): VoiceSettings {
   if (!oldVoice) return DEFAULT_VOICE_SETTINGS;
   
-  // Check if already in new format
-  if ('ttsProvider' in oldVoice) {
-    return {
-      ttsProvider: oldVoice.ttsProvider || 'browser',
-      sttProvider: oldVoice.sttProvider || 'browser',
-      conversationProvider: oldVoice.conversationProvider || 'gemini',
-    };
+  // Check if already in new format with 'provider'
+  if ('provider' in oldVoice) {
+    return { provider: oldVoice.provider || 'gemini-default' };
   }
   
-  // Migrate from old format (ttsWebhookId/sttWebhookId)
-  return {
-    ttsProvider: oldVoice.ttsWebhookId || 'browser',
-    sttProvider: oldVoice.sttWebhookId || 'browser',
-    conversationProvider: 'gemini', // Default to gemini for conversation
-  };
+  // Migrate from old format (ttsProvider/conversationProvider)
+  if ('conversationProvider' in oldVoice) {
+    return { provider: oldVoice.conversationProvider || 'gemini-default' };
+  }
+  
+  // Very old format
+  return DEFAULT_VOICE_SETTINGS;
+}
+
+// Helper to migrate conversational AIs
+function migrateConversationalAIs(settings: any): ConversationalAISettings[] {
+  if (settings.conversationalAIs && settings.conversationalAIs.length > 0) {
+    return settings.conversationalAIs;
+  }
+  // Add default Gemini if not present
+  return [DEFAULT_GEMINI_AI];
 }
 
 export const useSettings = () => {
@@ -230,16 +247,13 @@ export const useSettings = () => {
       }
     }
     
-    // Reset voice settings if they referenced this webhook
-    if (newSettings.voice.ttsProvider === id) {
-      newSettings.voice.ttsProvider = 'browser';
+    // Reset voice settings if they referenced this webhook or conversational AI
+    if (newSettings.voice.provider === id) {
+      newSettings.voice.provider = 'gemini-default';
     }
-    if (newSettings.voice.sttProvider === id) {
-      newSettings.voice.sttProvider = 'browser';
-    }
-    if (newSettings.voice.conversationProvider === id) {
-      newSettings.voice.conversationProvider = 'gemini';
-    }
+    
+    // Also remove from conversationalAIs if it's there
+    newSettings.conversationalAIs = newSettings.conversationalAIs.filter(ai => ai.id !== id);
     
     await saveSettings(newSettings);
   }, [settings, saveSettings]);
@@ -303,53 +317,64 @@ export const useSettings = () => {
     });
   }, [user]);
 
-  // Helper to check if a provider is a webhook
-  const isWebhookProvider = useCallback((provider: VoiceProvider): boolean => {
-    return provider !== 'browser' && provider !== 'gemini';
-  }, []);
+  // Get conversational AI by ID
+  const getConversationalAIById = useCallback((id: string): ConversationalAISettings | undefined => {
+    return settings.conversationalAIs.find(ai => ai.id === id);
+  }, [settings.conversationalAIs]);
 
-  // Get the TTS configuration based on current settings
-  const getTTSConfig = useCallback(() => {
-    const provider = settings.voice.ttsProvider;
-    if (provider === 'browser') {
+  // Save conversational AI
+  const saveConversationalAI = useCallback(async (ai: ConversationalAISettings) => {
+    const newSettings = { ...settings };
+    const existingIndex = newSettings.conversationalAIs.findIndex(a => a.id === ai.id);
+    
+    if (existingIndex >= 0) {
+      newSettings.conversationalAIs[existingIndex] = ai;
+    } else {
+      newSettings.conversationalAIs.push(ai);
+    }
+    
+    await saveSettings(newSettings);
+  }, [settings, saveSettings]);
+
+  // Delete conversational AI
+  const deleteConversationalAI = useCallback(async (id: string) => {
+    // Don't allow deleting the default Gemini
+    if (id === 'gemini-default') return;
+    
+    const newSettings = { ...settings };
+    newSettings.conversationalAIs = newSettings.conversationalAIs.filter(ai => ai.id !== id);
+    
+    // Reset voice provider if it referenced this AI
+    if (newSettings.voice.provider === id) {
+      newSettings.voice.provider = 'gemini-default';
+    }
+    
+    await saveSettings(newSettings);
+  }, [settings, saveSettings]);
+
+  // Get the voice provider configuration (unified - determines what mode to use)
+  const getVoiceProviderConfig = useCallback(() => {
+    const providerId = settings.voice.provider;
+    
+    // Check if it's 'browser'
+    if (providerId === 'browser') {
       return { type: 'browser' as const };
     }
-    if (provider === 'gemini') {
-      // Gemini doesn't have its own TTS, fall back to browser
-      return { type: 'browser' as const };
+    
+    // Check if it's a conversational AI
+    const conversationalAI = settings.conversationalAIs.find(ai => ai.id === providerId);
+    if (conversationalAI) {
+      return { type: 'conversational-ai' as const, ai: conversationalAI };
     }
-    const webhook = settings.webhooks.find(w => w.id === provider);
+    
+    // Check if it's a webhook (ElevenLabs agent, etc.)
+    const webhook = settings.webhooks.find(w => w.id === providerId);
     if (webhook) {
       return { type: 'webhook' as const, webhook };
     }
-    return { type: 'browser' as const };
-  }, [settings]);
-
-  // Get the STT configuration based on current settings
-  const getSTTConfig = useCallback(() => {
-    const provider = settings.voice.sttProvider;
-    if (provider === 'browser' || provider === 'gemini') {
-      // Both browser and gemini use browser STT
-      return { type: 'browser' as const };
-    }
-    const webhook = settings.webhooks.find(w => w.id === provider);
-    if (webhook) {
-      return { type: 'webhook' as const, webhook };
-    }
-    return { type: 'browser' as const };
-  }, [settings]);
-
-  // Get the conversation AI configuration
-  const getConversationConfig = useCallback(() => {
-    const provider = settings.voice.conversationProvider;
-    if (provider === 'gemini') {
-      return { type: 'gemini' as const };
-    }
-    const webhook = settings.webhooks.find(w => w.id === provider);
-    if (webhook) {
-      return { type: 'webhook' as const, webhook };
-    }
-    return { type: 'gemini' as const };
+    
+    // Default to first conversational AI (Gemini)
+    return { type: 'conversational-ai' as const, ai: settings.conversationalAIs[0] || DEFAULT_GEMINI_AI };
   }, [settings]);
 
   return {
@@ -363,9 +388,11 @@ export const useSettings = () => {
     clearAllSettings,
     saveSettings,
     updateVoiceSettings,
-    isWebhookProvider,
-    getTTSConfig,
-    getSTTConfig,
-    getConversationConfig,
+    // Conversational AI management
+    getConversationalAIById,
+    saveConversationalAI,
+    deleteConversationalAI,
+    // Voice provider config
+    getVoiceProviderConfig,
   };
 };
