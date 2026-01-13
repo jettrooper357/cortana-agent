@@ -803,7 +803,16 @@ export default function Settings() {
                         {webhook.type === 'elevenlabs' && 'ElevenLabs'}
                         {webhook.type === 'openai' && 'OpenAI'}
                         {webhook.type === 'custom' && 'Custom'}
-                        {webhook.agentId && ` • ID: ${webhook.agentId.substring(0, 8)}...`}
+                        {webhook.type === 'elevenlabs' && (
+                          <>
+                            {webhook.agentId && ` • Agent: ${webhook.agentId.substring(0, 12)}...`}
+                            {webhook.voiceId && ` • Voice: ${webhook.voiceId.substring(0, 8)}...`}
+                            {!webhook.agentId && !webhook.voiceId && (
+                              <span className="text-amber-500"> • ⚠️ No Agent ID or Voice ID configured</span>
+                            )}
+                          </>
+                        )}
+                        {webhook.type !== 'elevenlabs' && webhook.agentId && ` • ID: ${webhook.agentId.substring(0, 8)}...`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
