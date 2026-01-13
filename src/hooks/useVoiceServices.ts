@@ -53,22 +53,53 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
 
   // ==================== TTS ====================
 
-  // Browser TTS
-  const speakWithBrowser = useCallback((text: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (!('speechSynthesis' in window)) {
-        reject(new Error('Browser does not support speech synthesis'));
+  // Ensure voices are loaded (they load asynchronously in many browsers)
+  const getVoicesAsync = useCallback((): Promise<SpeechSynthesisVoice[]> => {
+    return new Promise((resolve) => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        resolve(voices);
         return;
       }
+      
+      // Voices not loaded yet, wait for the event
+      const handleVoicesChanged = () => {
+        const loadedVoices = window.speechSynthesis.getVoices();
+        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+        resolve(loadedVoices);
+      };
+      
+      window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+      
+      // Timeout fallback after 1 second
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+        resolve(window.speechSynthesis.getVoices());
+      }, 1000);
+    });
+  }, []);
 
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
+  // Browser TTS
+  const speakWithBrowser = useCallback(async (text: string): Promise<void> => {
+    console.log('[Browser TTS] Starting with text:', text.substring(0, 50) + '...');
+    
+    if (!('speechSynthesis' in window)) {
+      console.error('[Browser TTS] Speech synthesis not supported');
+      throw new Error('Browser does not support speech synthesis');
+    }
 
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
+    // Wait for voices to be loaded
+    const voices = await getVoicesAsync();
+    console.log('[Browser TTS] Available voices:', voices.length);
+
+    return new Promise((resolve, reject) => {
       const utterance = new SpeechSynthesisUtterance(text);
       synthRef.current = utterance;
       
       // Try to get a nice voice
-      const voices = window.speechSynthesis.getVoices();
       const preferredVoice = voices.find(v => 
         v.name.includes('Samantha') || 
         v.name.includes('Google') || 
@@ -78,25 +109,55 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
       
       if (preferredVoice) {
         utterance.voice = preferredVoice;
+        console.log('[Browser TTS] Using voice:', preferredVoice.name);
+      } else {
+        console.warn('[Browser TTS] No voice available, using default');
       }
       
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
       
-      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onstart = () => {
+        console.log('[Browser TTS] Speech started');
+        setIsSpeaking(true);
+      };
       utterance.onend = () => {
+        console.log('[Browser TTS] Speech ended');
         setIsSpeaking(false);
         resolve();
       };
       utterance.onerror = (event) => {
+        console.error('[Browser TTS] Speech error:', event.error);
         setIsSpeaking(false);
         reject(new Error(event.error));
       };
       
+      // Chrome bug workaround: speech can get stuck if page is not focused
+      // Force a resume in case speech synthesis is paused
+      window.speechSynthesis.resume();
+      
       window.speechSynthesis.speak(utterance);
+      console.log('[Browser TTS] Speech queued');
+      
+      // Chrome bug workaround: speech synthesis can pause after ~15 seconds
+      // Keep it alive with periodic resume calls
+      const keepAlive = setInterval(() => {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.resume();
+        } else {
+          clearInterval(keepAlive);
+        }
+      }, 5000);
+      
+      utterance.onend = () => {
+        clearInterval(keepAlive);
+        console.log('[Browser TTS] Speech ended');
+        setIsSpeaking(false);
+        resolve();
+      };
     });
-  }, []);
+  }, [getVoicesAsync]);
 
   // ElevenLabs TTS - now accepts webhook config
   const speakWithElevenLabs = useCallback(async (text: string, webhook?: WebhookSettings | null): Promise<void> => {
