@@ -23,6 +23,7 @@ export interface ConversationalAISettings {
   type: ConversationalAIType;
   apiKey?: string; // Optional - some don't need it (e.g., Gemini via Lovable)
   model?: string; // Optional model override
+  ttsWebhookId?: string; // Optional - use a specific TTS webhook instead of browser
   isActive: boolean;
 }
 
@@ -358,23 +359,27 @@ export const useSettings = () => {
     
     // Check if it's 'browser'
     if (providerId === 'browser') {
-      return { type: 'browser' as const };
+      return { type: 'browser' as const, ttsWebhook: undefined };
     }
     
     // Check if it's a conversational AI
     const conversationalAI = settings.conversationalAIs.find(ai => ai.id === providerId);
     if (conversationalAI) {
-      return { type: 'conversational-ai' as const, ai: conversationalAI };
+      // If the conversational AI has a TTS webhook configured, include it
+      const ttsWebhook = conversationalAI.ttsWebhookId 
+        ? settings.webhooks.find(w => w.id === conversationalAI.ttsWebhookId && w.type === 'elevenlabs')
+        : undefined;
+      return { type: 'conversational-ai' as const, ai: conversationalAI, ttsWebhook };
     }
     
     // Check if it's a webhook (ElevenLabs agent, etc.)
     const webhook = settings.webhooks.find(w => w.id === providerId);
     if (webhook) {
-      return { type: 'webhook' as const, webhook };
+      return { type: 'webhook' as const, webhook, ttsWebhook: webhook.type === 'elevenlabs' ? webhook : undefined };
     }
     
     // Default to first conversational AI (Gemini)
-    return { type: 'conversational-ai' as const, ai: settings.conversationalAIs[0] || DEFAULT_GEMINI_AI };
+    return { type: 'conversational-ai' as const, ai: settings.conversationalAIs[0] || DEFAULT_GEMINI_AI, ttsWebhook: undefined };
   }, [settings]);
 
   return {
