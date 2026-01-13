@@ -84,7 +84,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     config.onStateChange?.(newState);
   }, [config]);
 
-  // Speak response using ElevenLabs or browser TTS based on settings
+  // Speak response - try ElevenLabs if configured, always fallback to browser TTS on any error
   const speak = useCallback(async (text: string): Promise<void> => {
     if (!text.trim()) return;
 
@@ -95,68 +95,61 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     const providerConfig = getVoiceProviderConfig();
     const ttsWebhook = providerConfig.ttsWebhook;
     
-    console.log('[Gemini Live] TTS provider config:', providerConfig.type, 'TTS Webhook:', ttsWebhook?.name);
+    console.log('[Gemini Live] TTS config:', { type: providerConfig.type, webhook: ttsWebhook?.name, voiceId: ttsWebhook?.voiceId });
     
-    if (ttsWebhook && ttsWebhook.type === 'elevenlabs') {
-      // ONLY use voiceId for TTS - agentId is for Conversational AI agents, NOT for TTS
-      // Agent IDs look like "agent_01..." and will fail with 404 on the TTS endpoint
-      const voiceIdForTTS = ttsWebhook.voiceId;
-      
-      if (!voiceIdForTTS) {
-        console.warn('[Gemini Live] No voice ID configured for ElevenLabs TTS (agentId cannot be used for TTS), using browser TTS');
-      } else {
-        try {
-          console.log('[Gemini Live] Using ElevenLabs TTS with voice:', voiceIdForTTS);
-          
-          const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              },
-              body: JSON.stringify({ text, voiceId: voiceIdForTTS }),
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`ElevenLabs TTS failed: ${response.status}`);
+    // Try ElevenLabs TTS if webhook is configured with a voiceId
+    if (ttsWebhook?.type === 'elevenlabs' && ttsWebhook.voiceId) {
+      try {
+        console.log('[Gemini Live] Attempting ElevenLabs TTS with voice:', ttsWebhook.voiceId);
+        
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ text, voiceId: ttsWebhook.voiceId }),
           }
+        );
 
-          const data = await response.json();
-          
-          if (data.audioContent) {
-            // Play the audio
-            await new Promise<void>((resolve, reject) => {
-              const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
-              const audio = new Audio(audioUrl);
-              audioRef.current = audio;
-              
-              audio.onended = () => {
-                audioRef.current = null;
-                isSpeakingRef.current = false;
-                if (isActive) {
-                  updateState('listening');
-                }
-                resolve();
-              };
-              
-              audio.onerror = (e) => {
-                console.error('[Gemini Live] Audio playback error:', e);
-                audioRef.current = null;
-                reject(new Error('Audio playback failed'));
-              };
-              
-              audio.play().catch(reject);
-            });
-            return;
-          }
-        } catch (error) {
-          console.error('[Gemini Live] ElevenLabs TTS failed, falling back to browser:', error);
-          // Fall through to browser TTS
+        if (!response.ok) {
+          throw new Error(`ElevenLabs TTS failed: ${response.status}`);
         }
+
+        const data = await response.json();
+        
+        if (data.audioContent) {
+          // Play the audio
+          await new Promise<void>((resolve, reject) => {
+            const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
+            const audio = new Audio(audioUrl);
+            audioRef.current = audio;
+            
+            audio.onended = () => {
+              audioRef.current = null;
+              isSpeakingRef.current = false;
+              if (isActive) {
+                updateState('listening');
+              }
+              resolve();
+            };
+            
+            audio.onerror = (e) => {
+              console.error('[Gemini Live] Audio playback error:', e);
+              audioRef.current = null;
+              reject(new Error('Audio playback failed'));
+            };
+            
+            audio.play().catch(reject);
+          });
+          return; // Success - don't fallback to browser
+        }
+      } catch (error) {
+        console.warn('[Gemini Live] ElevenLabs TTS failed, using browser TTS:', error);
+        // Fall through to browser TTS
       }
     }
 

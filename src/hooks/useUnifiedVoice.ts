@@ -74,6 +74,7 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
   });
   
   // Determine which mode to use based on settings
+  // IMPORTANT: Always try to use the selected mode - only fallback on actual errors during runtime
   useEffect(() => {
     const providerConfig = getVoiceProviderConfig();
     console.log('[UnifiedVoice] Provider config:', providerConfig);
@@ -81,21 +82,19 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
     if (providerConfig.type === 'browser') {
       setActiveMode('browser');
     } else if (providerConfig.type === 'conversational-ai') {
-      // Check if the AI has an API key for native Gemini Live
+      // Try Gemini Live first if API key exists, otherwise use fallback
+      // Both modes will work - fallback uses free Lovable AI
       if (providerConfig.ai?.apiKey) {
         setActiveMode('gemini-live');
       } else {
-        // Use fallback mode (browser STT + Gemini text API + TTS)
         setActiveMode('gemini-fallback');
       }
     } else if (providerConfig.type === 'webhook') {
-      // Check if webhook has agentId for full ElevenLabs agent mode
-      // Otherwise, use gemini-fallback which will use the webhook's voiceId for TTS only
+      // Try ElevenLabs agent if agentId exists
+      // Otherwise use Gemini fallback (which will use webhook's voiceId for TTS if available)
       if (providerConfig.webhook?.agentId) {
         setActiveMode('elevenlabs-agent');
       } else {
-        // No agentId means this webhook is for TTS only - use Gemini fallback mode
-        console.log('[UnifiedVoice] Webhook has no agentId, using Gemini fallback with ElevenLabs TTS');
         setActiveMode('gemini-fallback');
       }
     }
@@ -116,7 +115,7 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
     return 'idle';
   }, [activeMode, geminiLive.state, geminiFallback.state, elevenLabsConversation.status, elevenLabsConversation.isSpeaking]);
   
-  // Unified start
+  // Unified start - always try the selected mode and fallback only on errors
   const start = useCallback(async () => {
     const providerConfig = getVoiceProviderConfig();
     console.log('[UnifiedVoice] Starting with mode:', activeMode, 'config:', providerConfig);
@@ -125,33 +124,30 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
       toast.info('Browser mode active - no AI conversation');
       config.onStateChange?.('listening');
     } else if (activeMode === 'gemini-live') {
-      await geminiLive.start();
-    } else if (activeMode === 'gemini-fallback') {
-      // Check if TTS is configured - warn if not
-      if (providerConfig.ttsWebhook && !providerConfig.ttsWebhook.voiceId) {
-        console.warn('[UnifiedVoice] ElevenLabs webhook configured but no voiceId - using browser TTS');
-        toast.info('Using browser voice. Add a Voice ID to your webhook for ElevenLabs TTS.');
+      try {
+        await geminiLive.start();
+      } catch (error) {
+        console.error('[UnifiedVoice] Gemini Live failed, trying fallback:', error);
+        toast.warning('Gemini Live unavailable, using fallback mode');
+        setActiveMode('gemini-fallback');
+        await geminiFallback.start();
       }
+    } else if (activeMode === 'gemini-fallback') {
+      // Just start - TTS will automatically fallback to browser if ElevenLabs fails
       await geminiFallback.start();
     } else if (activeMode === 'elevenlabs-agent' && providerConfig.type === 'webhook' && providerConfig.webhook) {
       const webhook = providerConfig.webhook;
-      if (!webhook.agentId) {
-        toast.error('ElevenLabs agent ID not configured');
-        config.onError?.('ElevenLabs agent ID not configured');
-        return;
-      }
       
       try {
         config.onStateChange?.('connecting');
         await navigator.mediaDevices.getUserMedia({ audio: true });
         await elevenLabsConversation.startSession({
-          agentId: webhook.agentId,
+          agentId: webhook.agentId!,
         });
         toast.success('ElevenLabs agent connected');
       } catch (error) {
         console.error('[UnifiedVoice] Failed to start ElevenLabs agent:', error);
-        toast.error('ElevenLabs agent failed - falling back to Gemini AI');
-        config.onError?.(error instanceof Error ? error.message : 'Failed to start');
+        toast.warning('ElevenLabs agent failed - using Gemini AI');
         
         // Fallback to Gemini mode if ElevenLabs agent fails
         setActiveMode('gemini-fallback');
