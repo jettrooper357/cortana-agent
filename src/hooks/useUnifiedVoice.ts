@@ -56,25 +56,6 @@ Use this context to provide relevant, personalized assistance. Reference specifi
     onConnect: () => {
       console.log('[UnifiedVoice] ElevenLabs agent connected');
       config.onStateChange?.('listening');
-      
-      // Send initial context update after connection
-      const appContext = config.getAppContext?.();
-      if (appContext) {
-        console.log('[UnifiedVoice] Sending context to ElevenLabs agent');
-        // Use sendContextualUpdate to inject context without triggering response
-        setTimeout(() => {
-          try {
-            elevenLabsConversation.sendContextualUpdate(
-              `Here is the current context about the user's tasks, goals, and home:
-${appContext}
-
-Use this information to provide relevant assistance.`
-            );
-          } catch (err) {
-            console.warn('[UnifiedVoice] Failed to send context update:', err);
-          }
-        }, 500); // Small delay to ensure connection is stable
-      }
     },
     onDisconnect: () => {
       console.log('[UnifiedVoice] ElevenLabs agent disconnected');
@@ -87,7 +68,6 @@ Use this information to provide relevant assistance.`
     onMessage: (message) => {
       console.log('[UnifiedVoice] ElevenLabs message:', message);
       // Handle transcripts and responses based on message structure
-      // The @11labs/react SDK returns messages with 'source' property
       const msg = message as any;
       if (msg.source === 'user' && msg.message) {
         config.onTranscript?.(msg.message, true);
@@ -190,32 +170,20 @@ Use this information to provide relevant assistance.`
       
       try {
         config.onStateChange?.('connecting');
-        await navigator.mediaDevices.getUserMedia({ audio: true });
         
-        // Build context for overrides (if agent supports dynamic prompts)
-        const appContext = config.getAppContext?.();
+        // Request microphone permission first
+        console.log('[UnifiedVoice] Requesting microphone permission...');
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('[UnifiedVoice] Microphone permission granted');
         
+        console.log('[UnifiedVoice] Starting ElevenLabs agent with ID:', webhook.agentId);
+        
+        // Start the ElevenLabs session
         await elevenLabsConversation.startSession({
           agentId: webhook.agentId!,
-          // If you enable overrides in ElevenLabs Web UI, you can pass dynamic prompt:
-          ...(appContext && {
-            overrides: {
-              agent: {
-                prompt: {
-                  prompt: `You are Cortana, an AI home guardian and personal assistant.
-You have access to the user's tasks, goals, rules, and home automation.
-Be concise, warm, and helpful - responses will be spoken aloud.
-Keep responses under 2 sentences when possible.
-
-## Current Context
-${appContext}
-
-Use this context to provide relevant, personalized assistance.`,
-                },
-              },
-            },
-          }),
         });
+        
+        console.log('[UnifiedVoice] ElevenLabs startSession completed, status:', elevenLabsConversation.status);
         toast.success('ElevenLabs agent connected');
       } catch (error) {
         console.error('[UnifiedVoice] Failed to start ElevenLabs agent:', error);
