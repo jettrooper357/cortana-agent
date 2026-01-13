@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
@@ -9,6 +9,7 @@ import { useLifeManager } from '@/hooks/useLifeManager';
 import { useUnifiedVoice } from '@/hooks/useUnifiedVoice';
 import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
+import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
@@ -19,10 +20,27 @@ export default function LifeManagerInterface() {
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [lastIntervention, setLastIntervention] = useState<string>('');
   const [observationLog, setObservationLog] = useState<string[]>([]);
-  const [conversationMode, setConversationMode] = useState(false);
+  const [isActive, setIsActive] = useState(false);
 
   const { tasks, getPendingTasks, getOverdueTasks } = useTasks();
   const { goals } = useGoals();
+  const { getVoiceProviderConfig } = useSettings();
+  
+  // Determine if we should use interactive conversation based on Voice Provider setting
+  // Interactive = ElevenLabs Agent (has agentId) or any Conversational AI
+  const isConversationalMode = useMemo(() => {
+    const config = getVoiceProviderConfig();
+    // If webhook with agentId (ElevenLabs Agent) -> conversational
+    if (config.type === 'webhook' && config.webhook?.agentId) {
+      return true;
+    }
+    // If conversational AI (Gemini, etc.) -> conversational
+    if (config.type === 'conversational-ai') {
+      return true;
+    }
+    // Browser or TTS-only webhook -> passive observation
+    return false;
+  }, [getVoiceProviderConfig]);
   
   // Interactive voice conversation using settings-based provider
   const unifiedVoice = useUnifiedVoice({
@@ -32,7 +50,7 @@ Be concise, warm, and helpful - responses will be spoken aloud.
 Keep responses under 2 sentences when possible.
 Use natural, conversational language.`,
     onStateChange: (state) => {
-      if (conversationMode) {
+      if (isActive && isConversationalMode) {
         if (state === 'idle') setSessionState('idle');
         else if (state === 'connecting' || state === 'processing') setSessionState('processing');
         else if (state === 'listening') setSessionState('conversing');
@@ -58,7 +76,7 @@ Use natural, conversational language.`,
     observationIntervalMs: 30000, // 30 seconds
     minInterventionGapMs: 60000, // 1 minute between interventions
     onIntervention: (message, severity) => {
-      if (!conversationMode) {
+      if (isActive && !isConversationalMode) {
         setLastIntervention(message);
         setSessionState('intervening');
         
@@ -73,20 +91,20 @@ Use natural, conversational language.`,
       }
     },
     onObservation: (observation) => {
-      if (!conversationMode) {
+      if (isActive && !isConversationalMode) {
         setObservationLog(prev => [observation, ...prev.slice(0, 9)]);
       }
     },
     onSpeaking: (speaking) => {
-      if (!conversationMode) {
+      if (isActive && !isConversationalMode) {
         setSessionState(speaking ? 'intervening' : 'observing');
       }
     },
   });
 
-  // Update session state based on life manager (when not in conversation mode)
+  // Update session state based on life manager (when in passive mode)
   useEffect(() => {
-    if (conversationMode) return;
+    if (!isActive || isConversationalMode) return;
     
     if (lifeManager.isSpeaking) {
       setSessionState('intervening');
@@ -97,65 +115,61 @@ Use natural, conversational language.`,
     } else {
       setSessionState('idle');
     }
-  }, [lifeManager.isSpeaking, lifeManager.isProcessing, lifeManager.isActive, conversationMode]);
+  }, [lifeManager.isSpeaking, lifeManager.isProcessing, lifeManager.isActive, isActive, isConversationalMode]);
 
-  // Handle starting conversation mode (using Voice Provider setting)
-  const handleStartConversation = useCallback(async () => {
+  // Single start handler - automatically chooses mode based on Voice Provider
+  const handleStart = useCallback(async () => {
     try {
-      // Stop life manager if running
-      if (lifeManager.isActive) {
-        lifeManager.stop();
-      }
-      
-      setConversationMode(true);
+      setIsActive(true);
       setSessionState('processing');
-      await unifiedVoice.start();
-      console.log('[LifeManager] Started conversation with provider:', unifiedVoice.providerName);
-    } catch (err) {
-      console.error('Failed to start conversation:', err);
-      toast.error('Failed to start voice conversation');
-      setConversationMode(false);
-      setSessionState('idle');
-    }
-  }, [lifeManager, unifiedVoice]);
-
-  // Handle stopping conversation mode
-  const handleStopConversation = useCallback(async () => {
-    try {
-      await unifiedVoice.stop();
-    } catch (err) {
-      console.error('Failed to stop conversation:', err);
-    }
-    setConversationMode(false);
-    setSessionState('idle');
-  }, [unifiedVoice]);
-
-  const handleStartObserving = useCallback(async () => {
-    if (conversationMode) {
-      await handleStopConversation();
-    }
-    try {
-      await lifeManager.start();
+      
+      if (isConversationalMode) {
+        // Interactive conversation mode
+        await unifiedVoice.start();
+        console.log('[LifeManager] Started interactive conversation with:', unifiedVoice.providerName);
+      } else {
+        // Passive observation mode
+        await lifeManager.start();
+        console.log('[LifeManager] Started passive observation');
+      }
     } catch (err) {
       console.error('Failed to start:', err);
-      toast.error('Failed to start life manager');
+      toast.error('Failed to start - falling back to observation mode');
+      // Fallback to observation if conversation fails
+      try {
+        await lifeManager.start();
+      } catch (e) {
+        setIsActive(false);
+        setSessionState('idle');
+      }
     }
-  }, [lifeManager, conversationMode, handleStopConversation]);
+  }, [isConversationalMode, unifiedVoice, lifeManager]);
 
-  const handleStopObserving = useCallback(() => {
-    lifeManager.stop();
-  }, [lifeManager]);
+  // Single stop handler
+  const handleStop = useCallback(async () => {
+    try {
+      if (isConversationalMode) {
+        await unifiedVoice.stop();
+      } else {
+        lifeManager.stop();
+      }
+    } catch (err) {
+      console.error('Failed to stop:', err);
+    }
+    setIsActive(false);
+    setSessionState('idle');
+  }, [isConversationalMode, unifiedVoice, lifeManager]);
 
   const pendingTasks = getPendingTasks();
   const overdueTasks = getOverdueTasks();
   const activeGoals = goals.filter(g => g.status === 'active');
 
   const getStatusText = () => {
-    if (conversationMode) {
+    if (isActive && isConversationalMode) {
       if (unifiedVoice.state === 'listening') return `Listening... (${unifiedVoice.providerName})`;
       if (unifiedVoice.state === 'speaking') return 'Speaking...';
       if (unifiedVoice.state === 'processing' || unifiedVoice.state === 'connecting') return 'Processing...';
-      return 'Ready';
+      return `Ready (${unifiedVoice.providerName})`;
     }
     switch (sessionState) {
       case 'observing':
@@ -212,7 +226,7 @@ Use natural, conversational language.`,
           />
 
           {/* Active Observation Indicator */}
-          {sessionState === 'observing' && !conversationMode && (
+          {sessionState === 'observing' && !isConversationalMode && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="relative">
                 <div className="w-32 h-32 rounded-full border border-ai-glow/30 animate-ping" style={{ animationDuration: '3s' }} />
@@ -224,7 +238,7 @@ Use natural, conversational language.`,
           )}
 
           {/* Conversation Mode Indicator */}
-          {conversationMode && unifiedVoice.state === 'listening' && (
+          {isActive && isConversationalMode && unifiedVoice.state === 'listening' && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="relative">
                 <div className="w-40 h-40 rounded-full border-2 border-voice-active/40 animate-pulse" />
@@ -252,7 +266,7 @@ Use natural, conversational language.`,
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
             <div
               className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-300 bg-gradient-card/95 backdrop-blur-sm ${
-                conversationMode ? (
+                isActive && isConversationalMode ? (
                   unifiedVoice.state === 'listening' ? 'text-voice-active border-voice-active' :
                   unifiedVoice.state === 'speaking' ? 'text-ai-glow border-ai-glow' :
                   'text-ai-pulse border-ai-pulse animate-pulse'
@@ -267,66 +281,47 @@ Use natural, conversational language.`,
               {(sessionState === 'processing' || unifiedVoice.state === 'connecting') && (
                 <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
               )}
-              {sessionState === 'observing' && !conversationMode && (
+              {sessionState === 'observing' && !isConversationalMode && (
                 <Eye className="w-4 h-4 inline mr-2" />
               )}
-              {conversationMode && unifiedVoice.state === 'listening' && (
+              {isActive && isConversationalMode && unifiedVoice.state === 'listening' && (
                 <Mic className="w-4 h-4 inline mr-2 animate-pulse" />
               )}
               {getStatusText()}
             </div>
           </div>
 
-          {/* Control Panel */}
+          {/* Control Panel - SINGLE BUTTON */}
           <div className="absolute bottom-4 right-4">
             <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-4">
-              <div className="flex items-center gap-4">
-                {/* Voice Conversation Button */}
-                <div className="flex flex-col items-center space-y-2">
-                  <Button
-                    onClick={conversationMode || unifiedVoice.isActive ? handleStopConversation : handleStartConversation}
-                    className={`w-16 h-16 rounded-full border-2 transition-all duration-300 ${
-                      conversationMode || unifiedVoice.isActive
-                        ? 'bg-voice-active border-voice-active hover:bg-voice-active/80'
-                        : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
-                    }`}
-                  >
-                    {conversationMode || unifiedVoice.isActive ? (
-                      <MicOff className="w-6 h-6" />
-                    ) : (
-                      <Mic className="w-6 h-6" />
-                    )}
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {conversationMode ? 'End Chat' : 'Talk'}
-                  </p>
-                </div>
-
-                {/* Life Manager Observer Button */}
-                <div className="flex flex-col items-center space-y-2">
-                  <Button
-                    onClick={lifeManager.isActive ? handleStopObserving : handleStartObserving}
-                    disabled={conversationMode}
-                    className={`w-16 h-16 rounded-full border-2 transition-all duration-300 ${
-                      lifeManager.isActive
-                        ? 'bg-ai-glow/50 border-ai-glow hover:bg-ai-glow/30'
-                        : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
-                    } ${conversationMode ? 'opacity-50' : ''}`}
-                  >
-                    <Eye className="w-6 h-6" />
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {lifeManager.isActive ? 'Stop' : 'Observe'}
-                  </p>
-                </div>
+              <div className="flex flex-col items-center space-y-2">
+                <Button
+                  onClick={isActive ? handleStop : handleStart}
+                  className={`w-20 h-20 rounded-full border-2 transition-all duration-300 ${
+                    isActive
+                      ? 'bg-voice-active border-voice-active hover:bg-voice-active/80'
+                      : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
+                  }`}
+                >
+                  {isActive ? (
+                    <MicOff className="w-8 h-8" />
+                  ) : isConversationalMode ? (
+                    <Mic className="w-8 h-8" />
+                  ) : (
+                    <Eye className="w-8 h-8" />
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  {isActive ? 'Stop' : (isConversationalMode ? 'Talk' : 'Observe')}
+                </p>
               </div>
               
               {/* Provider indicator */}
-              {(conversationMode || unifiedVoice.isActive) && (
+              {isActive && (
                 <div className="mt-3 text-center">
                   <Badge variant="outline" className="text-xs border-ai-glow/50 text-ai-glow">
-                    <MessageSquare className="w-3 h-3 mr-1" />
-                    {unifiedVoice.providerName}
+                    {isConversationalMode ? <MessageSquare className="w-3 h-3 mr-1" /> : <Eye className="w-3 h-3 mr-1" />}
+                    {isConversationalMode ? unifiedVoice.providerName : 'Observer'}
                   </Badge>
                 </div>
               )}
