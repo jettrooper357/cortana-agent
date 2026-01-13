@@ -30,6 +30,7 @@ const conversationalAISchema = z.object({
   type: z.enum(['gemini', 'chatgpt', 'claude', 'custom']),
   apiKey: z.string().optional(),
   model: z.string().optional(),
+  ttsWebhookId: z.string().optional(),
   isActive: z.boolean().default(false)
 });
 
@@ -73,6 +74,7 @@ export default function Settings() {
       type: 'gemini',
       apiKey: '',
       model: '',
+      ttsWebhookId: '',
       isActive: false
     }
   });
@@ -155,6 +157,7 @@ export default function Settings() {
         type: data.type as ConversationalAIType,
         apiKey: data.apiKey,
         model: data.model,
+        ttsWebhookId: data.ttsWebhookId || undefined,
         isActive: data.isActive
       };
       
@@ -206,6 +209,7 @@ export default function Settings() {
       type: ai.type,
       apiKey: ai.apiKey || '',
       model: ai.model || '',
+      ttsWebhookId: ai.ttsWebhookId || '',
       isActive: ai.isActive
     });
     setIsAIFormOpen(true);
@@ -435,6 +439,36 @@ export default function Settings() {
                         )}
                       />
 
+                      {/* TTS Webhook Selection */}
+                      <FormField
+                        control={aiForm.control}
+                        name="ttsWebhookId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>TTS Voice (Optional)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Use browser TTS" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="">Browser TTS (Default)</SelectItem>
+                                {settings.webhooks.filter(w => w.type === 'elevenlabs').map((webhook) => (
+                                  <SelectItem key={webhook.id} value={webhook.id}>
+                                    {webhook.name} (ElevenLabs)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Choose a voice for AI responses. Add ElevenLabs webhooks below for more options.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
                       <FormField
                         control={aiForm.control}
                         name="isActive"
@@ -517,6 +551,7 @@ export default function Settings() {
                         {ai.type === 'claude' && 'Claude'}
                         {ai.type === 'custom' && 'Custom AI'}
                         {ai.model && ` • Model: ${ai.model}`}
+                        {ai.ttsWebhookId && ` • TTS: ${settings.webhooks.find(w => w.id === ai.ttsWebhookId)?.name || 'Custom'}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
