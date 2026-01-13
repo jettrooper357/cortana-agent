@@ -50,6 +50,7 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const isSpeakingRef = useRef(false); // Track speaking state without causing re-renders
 
   // ==================== TTS ====================
 
@@ -228,9 +229,17 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
   }, []);
 
   // Main speak function - uses webhook config to determine provider
+  // Using ref to check if already speaking to avoid interruptions
   const speak = useCallback(async (text: string): Promise<void> => {
     if (!text.trim()) return;
     
+    // Prevent multiple simultaneous speak calls
+    if (isSpeakingRef.current) {
+      console.log('[TTS] Already speaking, queuing or skipping');
+      return;
+    }
+    
+    isSpeakingRef.current = true;
     setError(null);
     
     try {
@@ -258,6 +267,8 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
           console.error('Browser TTS fallback also failed:', fallbackErr);
         }
       }
+    } finally {
+      isSpeakingRef.current = false;
     }
   }, [ttsWebhook, speakWithBrowser, speakWithElevenLabs]);
 

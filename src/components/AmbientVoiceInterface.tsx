@@ -1,19 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Settings, Volume2, Loader2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Mic, MicOff, Settings, Volume2, Loader2, MessageSquare, User, Bot } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAmbientAIWithSettings } from '@/hooks/useAmbientAIWithSettings';
 import cortanaAI from '@/assets/cortana-ai.jpg';
 
 type SessionState = 'idle' | 'listening' | 'processing' | 'speaking';
 
+interface ConversationEntry {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
 export default function AmbientVoiceInterface() {
   const navigate = useNavigate();
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [lastResponse, setLastResponse] = useState<string>('');
   const [transcript, setTranscript] = useState<string>('');
+  const [conversationLog, setConversationLog] = useState<ConversationEntry[]>([]);
+  const [showLog, setShowLog] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const ambientAI = useAmbientAIWithSettings({
     onSpeaking: (speaking) => {
@@ -21,17 +32,38 @@ export default function AmbientVoiceInterface() {
     },
     onTranscript: (text, isFinal) => {
       setTranscript(text);
-      if (isFinal) {
+      if (isFinal && text.trim()) {
+        // Add user message to log
+        setConversationLog(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: text.trim(),
+          timestamp: new Date(),
+        }]);
         setSessionState('processing');
       }
     },
     onResponse: (response) => {
       setLastResponse(response);
+      // Add assistant response to log
+      setConversationLog(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: response,
+        timestamp: new Date(),
+      }]);
     },
     onAlert: (level, message) => {
       console.log(`[ALERT ${level}] ${message}`);
     },
   });
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [conversationLog]);
 
   // Update session state based on ambient AI state
   useEffect(() => {
@@ -83,31 +115,36 @@ export default function AmbientVoiceInterface() {
     }
   };
 
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="flex flex-col min-h-screen max-h-screen overflow-hidden bg-background">
       <CortanaHeader />
 
-      {/* Full Background Cortana Image */}
-      <div
-        className="flex-1 relative bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${cortanaAI})` }}
-      >
-        <div className="absolute inset-0 bg-gradient-glow opacity-30 animate-pulse-glow"></div>
-        <div className="absolute inset-0 bg-background/20"></div>
-
-        {/* Enhanced Holographic Cortana Overlay when Speaking */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Main Visual Area */}
         <div
-          className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-out ${
-            sessionState === 'speaking'
-              ? 'opacity-80 scale-110 animate-pulse-glow'
-              : 'opacity-0 scale-95'
-          }`}
-          style={{
-            backgroundImage: `url(/lovable-uploads/48c7a359-5a9a-4f2f-bb1c-71e5282e9b4b.png)`,
-            mixBlendMode: 'screen',
-            filter: 'brightness(1.5) contrast(1.3) saturate(1.2) hue-rotate(10deg)',
-          }}
-        />
+          className="flex-1 relative bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url(${cortanaAI})` }}
+        >
+          <div className="absolute inset-0 bg-gradient-glow opacity-30 animate-pulse-glow"></div>
+          <div className="absolute inset-0 bg-background/20"></div>
+
+          {/* Enhanced Holographic Cortana Overlay when Speaking */}
+          <div
+            className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-out ${
+              sessionState === 'speaking'
+                ? 'opacity-80 scale-110 animate-pulse-glow'
+                : 'opacity-0 scale-95'
+            }`}
+            style={{
+              backgroundImage: `url(/lovable-uploads/48c7a359-5a9a-4f2f-bb1c-71e5282e9b4b.png)`,
+              mixBlendMode: 'screen',
+              filter: 'brightness(1.5) contrast(1.3) saturate(1.2) hue-rotate(10deg)',
+            }}
+          />
 
         {/* Multi-layered Synthesized Halo Effects */}
         <div
@@ -200,17 +237,93 @@ export default function AmbientVoiceInterface() {
           </div>
         </div>
 
-        {/* Settings Button */}
-        <div className="absolute bottom-4 left-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate('/settings')}
-            className="bg-gradient-card/95 backdrop-blur-sm border-border hover:border-ai-glow hover:shadow-glow"
-          >
-            <Settings className="h-5 w-5" />
-          </Button>
+          {/* Settings Button */}
+          <div className="absolute bottom-4 left-4 flex gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigate('/settings')}
+              className="bg-gradient-card/95 backdrop-blur-sm border-border hover:border-ai-glow hover:shadow-glow"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setShowLog(!showLog)}
+              className={`bg-gradient-card/95 backdrop-blur-sm border-border hover:border-ai-glow hover:shadow-glow ${showLog ? 'border-ai-glow' : ''}`}
+            >
+              <MessageSquare className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
+
+        {/* Conversation Log Panel */}
+        {showLog && (
+          <div className="w-80 bg-gradient-card border-l border-border flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-ai-glow" />
+                <h2 className="text-lg font-semibold">Conversation</h2>
+              </div>
+              {conversationLog.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConversationLog([])}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+            
+            <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+              {conversationLog.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center py-8">
+                  <MessageSquare className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                  <p className="text-sm text-muted-foreground">No conversation yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Start speaking to begin
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {conversationLog.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`flex gap-3 ${entry.role === 'user' ? 'flex-row-reverse' : ''}`}
+                    >
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                        entry.role === 'user' 
+                          ? 'bg-primary/20 text-primary' 
+                          : 'bg-ai-glow/20 text-ai-glow'
+                      }`}>
+                        {entry.role === 'user' ? (
+                          <User className="w-4 h-4" />
+                        ) : (
+                          <Bot className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className={`flex-1 ${entry.role === 'user' ? 'text-right' : ''}`}>
+                        <div className={`inline-block max-w-full p-3 rounded-xl text-sm ${
+                          entry.role === 'user'
+                            ? 'bg-primary/10 text-foreground'
+                            : 'bg-muted/50 text-foreground'
+                        }`}>
+                          {entry.content}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatTime(entry.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        )}
       </div>
     </div>
   );
