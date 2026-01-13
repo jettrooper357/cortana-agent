@@ -108,6 +108,57 @@ ${cameraList}`);
     return false;
   }, [getVoiceProviderConfig]);
   
+  // Build individual data getters for ElevenLabs client tools
+  const getTasksData = useCallback(() => {
+    const pendingTasks = getPendingTasks();
+    const overdueTasks = getOverdueTasks();
+    if (pendingTasks.length === 0) return 'No pending tasks.';
+    
+    const taskList = pendingTasks.slice(0, 10).map(t => 
+      `- [${t.priority}] ${t.title}${t.due_at ? ` (due: ${new Date(t.due_at).toLocaleString()})` : ''}${t.status === 'in_progress' ? ' [IN PROGRESS]' : ''}`
+    ).join('\n');
+    return `${pendingTasks.length} pending tasks (${overdueTasks.length} overdue):\n${taskList}`;
+  }, [getPendingTasks, getOverdueTasks]);
+
+  const getGoalsData = useCallback(() => {
+    const activeGoals = goals.filter(g => g.status === 'active');
+    if (activeGoals.length === 0) return 'No active goals.';
+    
+    const goalList = activeGoals.slice(0, 5).map(g => {
+      const progress = g.target_value ? Math.round(((g.current_value || 0) / g.target_value) * 100) : 0;
+      return `- ${g.title}: ${g.current_value || 0}/${g.target_value || 0} ${g.unit || ''} (${progress}%)`;
+    }).join('\n');
+    return `${activeGoals.length} active goals:\n${goalList}`;
+  }, [goals]);
+
+  const getRulesData = useCallback(() => {
+    const enabledRules = getEnabledRules();
+    if (enabledRules.length === 0) return 'No active rules.';
+    
+    const ruleList = enabledRules.slice(0, 5).map(r => 
+      `- ${r.name}: ${r.description || r.trigger_type}`
+    ).join('\n');
+    return `${enabledRules.length} active rules:\n${ruleList}`;
+  }, [getEnabledRules]);
+
+  const getCamerasData = useCallback(() => {
+    const activeCameras = cameras.filter(c => c.is_active);
+    if (activeCameras.length === 0) return 'No active cameras.';
+    
+    const cameraList = activeCameras.map(c => 
+      `- ${c.name}${c.room ? ` (${c.room})` : ''}`
+    ).join('\n');
+    return `${activeCameras.length} active cameras:\n${cameraList}`;
+  }, [cameras]);
+
+  const getUserStatusData = useCallback(() => {
+    if (!userContext) return 'Status unknown.';
+    return `Current room: ${userContext.current_room || 'Unknown'}
+Activity: ${userContext.current_activity || 'Unknown'}
+Idle time: ${userContext.idle_minutes || 0} minutes
+Tasks completed today: ${userContext.tasks_completed_today || 0}`;
+  }, [userContext]);
+  
   // Interactive voice conversation using settings-based provider
   const unifiedVoice = useUnifiedVoice({
     systemInstruction: `You are Cortana, an AI home guardian and personal assistant.
@@ -115,8 +166,17 @@ You observe the home through sensors and conversation.
 Be concise, warm, and helpful - responses will be spoken aloud.
 Keep responses under 2 sentences when possible.
 Use natural, conversational language.
-You can discuss tasks, goals, rules, and home automation.`,
+You can discuss tasks, goals, rules, and home automation.
+When the user asks about tasks, goals, or their status, use the available tools to get the data.`,
     getAppContext, // Provide context to the AI
+    // Client tools for ElevenLabs agent
+    clientTools: {
+      getTasks: getTasksData,
+      getGoals: getGoalsData,
+      getRules: getRulesData,
+      getCameras: getCamerasData,
+      getUserStatus: getUserStatusData,
+    },
     onStateChange: (state) => {
       if (isActive && isConversationalMode) {
         if (state === 'idle') setSessionState('idle');

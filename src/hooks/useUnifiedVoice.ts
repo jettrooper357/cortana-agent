@@ -15,6 +15,14 @@ interface UnifiedVoiceConfig {
   systemInstruction?: string;
   // Function to get current app context (tasks, goals, etc.) for AI
   getAppContext?: () => string;
+  // Client tools for ElevenLabs to call
+  clientTools?: {
+    getTasks?: () => string;
+    getGoals?: () => string;
+    getRules?: () => string;
+    getCameras?: () => string;
+    getUserStatus?: () => string;
+  };
 }
 
 /**
@@ -51,7 +59,8 @@ Use this context to provide relevant, personalized assistance. Reference specifi
     return baseInstruction;
   }, [config]);
   
-  // ElevenLabs agent conversation hook
+  // ElevenLabs agent conversation hook with client tools
+  // IMPORTANT: These tools must also be configured in the ElevenLabs Web UI!
   const elevenLabsConversation = useConversation({
     onConnect: () => {
       console.log('[UnifiedVoice] ElevenLabs agent connected');
@@ -67,13 +76,47 @@ Use this context to provide relevant, personalized assistance. Reference specifi
     },
     onMessage: (message) => {
       console.log('[UnifiedVoice] ElevenLabs message:', message);
-      // Handle transcripts and responses based on message structure
       const msg = message as any;
       if (msg.source === 'user' && msg.message) {
         config.onTranscript?.(msg.message, true);
       } else if (msg.source === 'ai' && msg.message) {
         config.onResponse?.(msg.message);
       }
+    },
+    // Client tools that the ElevenLabs agent can call to get app data
+    // NOTE: You must configure these same tools in the ElevenLabs Web UI for the agent
+    clientTools: {
+      get_tasks: async () => {
+        console.log('[UnifiedVoice] ElevenLabs calling get_tasks');
+        const result = config.clientTools?.getTasks?.() || 'No tasks available';
+        console.log('[UnifiedVoice] Returning tasks:', result);
+        return result;
+      },
+      get_goals: async () => {
+        console.log('[UnifiedVoice] ElevenLabs calling get_goals');
+        const result = config.clientTools?.getGoals?.() || 'No goals available';
+        return result;
+      },
+      get_rules: async () => {
+        console.log('[UnifiedVoice] ElevenLabs calling get_rules');
+        const result = config.clientTools?.getRules?.() || 'No rules available';
+        return result;
+      },
+      get_cameras: async () => {
+        console.log('[UnifiedVoice] ElevenLabs calling get_cameras');
+        const result = config.clientTools?.getCameras?.() || 'No cameras available';
+        return result;
+      },
+      get_user_status: async () => {
+        console.log('[UnifiedVoice] ElevenLabs calling get_user_status');
+        const result = config.clientTools?.getUserStatus?.() || 'Status unknown';
+        return result;
+      },
+      get_full_context: async () => {
+        console.log('[UnifiedVoice] ElevenLabs calling get_full_context');
+        const result = config.getAppContext?.() || 'No context available';
+        return result;
+      },
     },
   });
   
