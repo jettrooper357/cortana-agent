@@ -403,24 +403,27 @@ export default function Settings() {
                         )}
                       />
 
-                      {(watchedAIType === 'chatgpt' || watchedAIType === 'claude' || watchedAIType === 'custom') && (
-                        <FormField
-                          control={aiForm.control}
-                          name="apiKey"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>API Key</FormLabel>
-                              <FormControl>
-                                <Input type="password" placeholder="sk-..." {...field} />
-                              </FormControl>
-                              <FormDescription>
-                                Your API key for this provider
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <FormField
+                        control={aiForm.control}
+                        name="apiKey"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {watchedAIType === 'gemini' ? 'Google API Key (Optional)' : 'API Key'}
+                            </FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder={watchedAIType === 'gemini' ? 'For Live Audio (optional)' : 'sk-...'} {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              {watchedAIType === 'gemini' 
+                                ? 'Optional: Provide a Google API key for real-time bidirectional audio. Without it, browser STT + AI text + TTS will be used.'
+                                : 'Your API key for this provider'
+                              }
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
                       <FormField
                         control={aiForm.control}
@@ -546,7 +549,7 @@ export default function Settings() {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {ai.type === 'gemini' && 'Gemini AI (Lovable Cloud)'}
+                        {ai.type === 'gemini' && (ai.apiKey ? 'Gemini Live Audio' : 'Gemini AI (Browser STT)')}
                         {ai.type === 'chatgpt' && 'ChatGPT'}
                         {ai.type === 'claude' && 'Claude'}
                         {ai.type === 'custom' && 'Custom AI'}
