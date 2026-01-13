@@ -178,7 +178,7 @@ export default function Settings() {
                   onValueChange={(value: string) => {
                     updateVoiceSettings({ ttsWebhookId: value });
                     const webhook = settings.webhooks.find(w => w.id === value);
-                    const providerName = value === 'browser' ? 'Browser (free)' : value === 'gemini' ? 'Gemini 2.5' : webhook?.name || 'selected service';
+                    const providerName = value === 'browser' ? 'Browser (free)' : webhook?.name || 'selected service';
                     toast({
                       title: 'TTS Updated',
                       description: `Now using ${providerName} for text-to-speech`,
@@ -195,19 +195,11 @@ export default function Settings() {
                         <span className="text-xs text-muted-foreground">Built-in browser voices</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="gemini">
-                      <div className="flex flex-col items-start">
-                        <span>Gemini 2.5 (Built-in)</span>
-                        <span className="text-xs text-muted-foreground">Real-time AI voice via Lovable AI</span>
-                      </div>
-                    </SelectItem>
-                    {settings.webhooks.map((webhook) => (
+                    {settings.webhooks.filter(w => w.type === 'elevenlabs').map((webhook) => (
                       <SelectItem key={webhook.id} value={webhook.id}>
                         <div className="flex flex-col items-start">
                           <span>{webhook.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {webhook.type.charAt(0).toUpperCase() + webhook.type.slice(1)}
-                          </span>
+                          <span className="text-xs text-muted-foreground">ElevenLabs TTS (high quality)</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -224,8 +216,7 @@ export default function Settings() {
                   value={settings.voice?.sttWebhookId || 'browser'}
                   onValueChange={(value: string) => {
                     updateVoiceSettings({ sttWebhookId: value });
-                    const webhook = settings.webhooks.find(w => w.id === value);
-                    const providerName = value === 'browser' ? 'Browser (free)' : value === 'gemini' ? 'Gemini 2.5' : webhook?.name || 'selected service';
+                    const providerName = value === 'browser' ? 'Browser (free)' : 'selected service';
                     toast({
                       title: 'STT Updated',
                       description: `Now using ${providerName} for speech recognition`,
@@ -242,20 +233,6 @@ export default function Settings() {
                         <span className="text-xs text-muted-foreground">Built-in browser speech recognition</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="gemini">
-                      <div className="flex flex-col items-start">
-                        <span>Gemini 2.5 (Built-in)</span>
-                        <span className="text-xs text-muted-foreground">Real-time AI transcription via Lovable AI</span>
-                      </div>
-                    </SelectItem>
-                    {settings.webhooks.filter(w => w.type === 'elevenlabs').map((webhook) => (
-                      <SelectItem key={webhook.id} value={webhook.id}>
-                        <div className="flex flex-col items-start">
-                          <span>{webhook.name}</span>
-                          <span className="text-xs text-muted-foreground">ElevenLabs Scribe</span>
-                        </div>
-                      </SelectItem>
-                    ))}
                   </SelectContent>
                 </Select>
               </div>
