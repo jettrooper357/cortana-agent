@@ -98,11 +98,12 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     console.log('[Gemini Live] TTS provider config:', providerConfig.type, 'TTS Webhook:', ttsWebhook?.name);
     
     if (ttsWebhook && ttsWebhook.type === 'elevenlabs') {
-      // Use voiceId for TTS, fall back to agentId if voiceId not set (legacy support)
-      const voiceIdForTTS = ttsWebhook.voiceId || ttsWebhook.agentId;
+      // ONLY use voiceId for TTS - agentId is for Conversational AI agents, NOT for TTS
+      // Agent IDs look like "agent_01..." and will fail with 404 on the TTS endpoint
+      const voiceIdForTTS = ttsWebhook.voiceId;
       
       if (!voiceIdForTTS) {
-        console.warn('[Gemini Live] No voice ID configured for ElevenLabs TTS, using browser TTS');
+        console.warn('[Gemini Live] No voice ID configured for ElevenLabs TTS (agentId cannot be used for TTS), using browser TTS');
       } else {
         try {
           console.log('[Gemini Live] Using ElevenLabs TTS with voice:', voiceIdForTTS);
