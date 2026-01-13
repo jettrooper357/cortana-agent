@@ -61,12 +61,20 @@ export function useLifeManager(config: LifeManagerConfig = {}) {
   const { tasks, refetch: refetchTasks } = useTasks();
   const { context, updateContext } = useUserContext();
   const { cameras } = useCameras();
-  const { settings } = useSettings();
+  const { settings, getWebhookById } = useSettings();
+  
+  // Get the configured webhook objects
+  const ttsWebhook = settings.voice?.ttsWebhookId && settings.voice.ttsWebhookId !== 'browser' 
+    ? getWebhookById(settings.voice.ttsWebhookId) 
+    : null;
+  const sttWebhook = settings.voice?.sttWebhookId && settings.voice.sttWebhookId !== 'browser'
+    ? getWebhookById(settings.voice.sttWebhookId)
+    : null;
   
   // Use voice services with current settings
   const voiceServices = useVoiceServices({
-    ttsProvider: settings.voice?.ttsProvider || 'browser',
-    sttProvider: settings.voice?.sttProvider || 'browser',
+    ttsWebhook,
+    sttWebhook,
   });
   
   const [isActive, setIsActive] = useState(false);

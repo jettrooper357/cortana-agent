@@ -3,23 +3,23 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { Json } from '@/integrations/supabase/types';
 
-export type VoiceProvider = 'browser' | 'elevenlabs';
+export type WebhookType = 'elevenlabs' | 'openai' | 'custom';
 
 export interface WebhookSettings {
   id: string;
   name: string;
-  type: 'elevenlabs' | 'openai' | 'custom';
+  type: WebhookType;
   agentId?: string;
   apiKey?: string;
   webhookUrl?: string;
   isActive: boolean;
 }
 
+// Voice settings now reference webhooks by ID
+// 'browser' is a special value meaning use browser APIs
 export interface VoiceSettings {
-  ttsProvider: VoiceProvider;
-  sttProvider: VoiceProvider;
-  elevenLabsVoiceId?: string;
-  browserVoiceName?: string;
+  ttsWebhookId: string; // 'browser' or webhook ID
+  sttWebhookId: string; // 'browser' or webhook ID
 }
 
 export interface AppSettings {
@@ -29,8 +29,8 @@ export interface AppSettings {
 }
 
 const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
-  ttsProvider: 'browser',
-  sttProvider: 'browser',
+  ttsWebhookId: 'browser',
+  sttWebhookId: 'browser',
 };
 
 const DEFAULT_SETTINGS: AppSettings = {

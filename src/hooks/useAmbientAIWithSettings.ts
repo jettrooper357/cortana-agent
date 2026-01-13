@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useGoals, Goal } from './useGoals';
 import { useTasks, Task } from './useTasks';
-import { useSettings, VoiceProvider } from './useSettings';
+import { useSettings } from './useSettings';
 import { useVoiceServices } from './useVoiceServices';
 
 interface GuardianResponse {
@@ -32,10 +32,19 @@ interface AmbientAIConfig {
 export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
   const { goals } = useGoals();
   const { tasks, refetch: refetchTasks } = useTasks();
-  const { settings } = useSettings();
+  const { settings, getWebhookById } = useSettings();
+  
+  // Get the configured webhook objects
+  const ttsWebhook = settings.voice?.ttsWebhookId && settings.voice.ttsWebhookId !== 'browser' 
+    ? getWebhookById(settings.voice.ttsWebhookId) 
+    : null;
+  const sttWebhook = settings.voice?.sttWebhookId && settings.voice.sttWebhookId !== 'browser'
+    ? getWebhookById(settings.voice.sttWebhookId)
+    : null;
+  
   const voiceServices = useVoiceServices({
-    ttsProvider: settings.voice?.ttsProvider || 'browser',
-    sttProvider: settings.voice?.sttProvider || 'browser',
+    ttsWebhook,
+    sttWebhook,
   });
   
   const [isActive, setIsActive] = useState(false);
@@ -51,18 +60,21 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
   const goalsRef = useRef<Goal[]>([]);
   const tasksRef = useRef<Task[]>([]);
 
-  // ElevenLabs Scribe (only used when sttProvider is 'elevenlabs')
+  // Check if using ElevenLabs for STT
+  const useElevenLabsSTT = sttWebhook?.type === 'elevenlabs';
+
+  // ElevenLabs Scribe (only used when sttWebhook is ElevenLabs type)
   const scribe = useScribe({
     modelId: 'scribe_v2_realtime',
     commitStrategy: CommitStrategy.VAD,
     onPartialTranscript: (data) => {
-      if (settings.voice?.sttProvider === 'elevenlabs') {
+      if (useElevenLabsSTT) {
         setCurrentTranscript(data.text);
         config.onTranscript?.(data.text, false);
       }
     },
     onCommittedTranscript: (data) => {
-      if (settings.voice?.sttProvider === 'elevenlabs') {
+      if (useElevenLabsSTT) {
         if (data.text && data.text.trim() !== lastProcessedTranscriptRef.current.trim()) {
           lastProcessedTranscriptRef.current = data.text;
           config.onTranscript?.(data.text, true);
@@ -280,7 +292,7 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
       
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      if (settings.voice?.sttProvider === 'elevenlabs') {
+      if (useElevenLabsSTT) {
         // Use ElevenLabs Scribe
         const { data, error: tokenError } = await supabase.functions.invoke('elevenlabs-scribe-token');
         
@@ -315,18 +327,18 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
       
       scheduleProactiveCheck();
       
-      const provider = settings.voice?.sttProvider === 'elevenlabs' ? 'ElevenLabs' : 'browser';
+      const provider = useElevenLabsSTT ? (sttWebhook?.name || 'ElevenLabs') : 'browser';
       toast.success(`Cortana is now listening (${provider})`);
     } catch (err) {
       console.error('Failed to start ambient AI:', err);
       setError(err instanceof Error ? err.message : 'Failed to start');
       toast.error('Failed to start listening. Check microphone permissions.');
     }
-  }, [scribe, scheduleProactiveCheck, settings.voice?.sttProvider, voiceServices, config, processInput]);
+  }, [scribe, scheduleProactiveCheck, useElevenLabsSTT, sttWebhook, voiceServices, config, processInput]);
 
   // Stop listening
   const stop = useCallback(() => {
-    if (settings.voice?.sttProvider === 'elevenlabs') {
+    if (useElevenLabsSTT) {
       scribe.disconnect();
     } else {
       voiceServices.stopListening();
@@ -345,7 +357,7 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
     setCurrentTranscript('');
     
     toast.info('Cortana stopped listening');
-  }, [scribe, settings.voice?.sttProvider, voiceServices]);
+  }, [scribe, useElevenLabsSTT, voiceServices]);
 
   // Cleanup
   useEffect(() => {
@@ -360,10 +372,10 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
 
   // Sync listening state
   useEffect(() => {
-    if (settings.voice?.sttProvider === 'elevenlabs') {
+    if (useElevenLabsSTT) {
       setIsListening(scribe.isConnected);
     }
-  }, [scribe.isConnected, settings.voice?.sttProvider]);
+  }, [scribe.isConnected, useElevenLabsSTT]);
 
   return {
     isActive,
@@ -371,7 +383,7 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
     isSpeaking: isSpeaking || voiceServices.isSpeaking,
     isProcessing,
     currentTranscript,
-    partialTranscript: settings.voice?.sttProvider === 'elevenlabs' 
+    partialTranscript: useElevenLabsSTT 
       ? scribe.partialTranscript 
       : voiceServices.interimTranscript,
     error,
@@ -384,9 +396,9 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
     conversationHistory: conversationHistoryRef.current,
     clearHistory: () => { conversationHistoryRef.current = []; },
     
-    // Current providers
-    ttsProvider: settings.voice?.ttsProvider || 'browser',
-    sttProvider: settings.voice?.sttProvider || 'browser',
+    // Current providers (for display)
+    ttsProvider: ttsWebhook?.name || 'Browser',
+    sttProvider: sttWebhook?.name || 'Browser',
     browserSupport: voiceServices.browserSupport,
   };
 }
