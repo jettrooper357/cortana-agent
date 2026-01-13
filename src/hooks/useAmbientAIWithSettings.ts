@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useScribe, CommitStrategy } from '@elevenlabs/react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useGoals, Goal } from './useGoals';
@@ -59,31 +58,6 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
   const proactiveCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const goalsRef = useRef<Goal[]>([]);
   const tasksRef = useRef<Task[]>([]);
-
-  // Check if using ElevenLabs for STT
-  const useElevenLabsSTT = sttWebhook?.type === 'elevenlabs';
-
-  // ElevenLabs Scribe (only used when sttWebhook is ElevenLabs type)
-  const scribe = useScribe({
-    modelId: 'scribe_v2_realtime',
-    commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data) => {
-      if (useElevenLabsSTT) {
-        setCurrentTranscript(data.text);
-        config.onTranscript?.(data.text, false);
-      }
-    },
-    onCommittedTranscript: (data) => {
-      if (useElevenLabsSTT) {
-        if (data.text && data.text.trim() !== lastProcessedTranscriptRef.current.trim()) {
-          lastProcessedTranscriptRef.current = data.text;
-          config.onTranscript?.(data.text, true);
-          processInput(data.text);
-        }
-        setCurrentTranscript('');
-      }
-    },
-  });
 
   // Keep refs updated
   useEffect(() => {
@@ -292,58 +266,34 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
       
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      if (useElevenLabsSTT) {
-        // Use ElevenLabs Scribe
-        const { data, error: tokenError } = await supabase.functions.invoke('elevenlabs-scribe-token');
-        
-        if (tokenError || !data?.token) {
-          throw new Error(tokenError?.message || 'Failed to get scribe token');
+      // Use browser speech recognition (ElevenLabs Scribe removed to avoid React hook conflicts)
+      await voiceServices.startListening((text, isFinal) => {
+        if (isFinal && text.trim() !== lastProcessedTranscriptRef.current.trim()) {
+          lastProcessedTranscriptRef.current = text;
+          config.onTranscript?.(text, true);
+          processInput(text);
+        } else if (!isFinal) {
+          setCurrentTranscript(text);
+          config.onTranscript?.(text, false);
         }
-
-        await scribe.connect({
-          token: data.token,
-          microphone: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-      } else {
-        // Use browser speech recognition
-        await voiceServices.startListening((text, isFinal) => {
-          if (isFinal && text.trim() !== lastProcessedTranscriptRef.current.trim()) {
-            lastProcessedTranscriptRef.current = text;
-            config.onTranscript?.(text, true);
-            processInput(text);
-          } else if (!isFinal) {
-            setCurrentTranscript(text);
-            config.onTranscript?.(text, false);
-          }
-        });
-      }
+      });
 
       setIsActive(true);
       setIsListening(true);
       
       scheduleProactiveCheck();
       
-      const provider = useElevenLabsSTT ? (sttWebhook?.name || 'ElevenLabs') : 'browser';
-      toast.success(`Cortana is now listening (${provider})`);
+      toast.success('Cortana is now listening (Browser)');
     } catch (err) {
       console.error('Failed to start ambient AI:', err);
       setError(err instanceof Error ? err.message : 'Failed to start');
       toast.error('Failed to start listening. Check microphone permissions.');
     }
-  }, [scribe, scheduleProactiveCheck, useElevenLabsSTT, sttWebhook, voiceServices, config, processInput]);
+  }, [scheduleProactiveCheck, voiceServices, config, processInput]);
 
   // Stop listening
   const stop = useCallback(() => {
-    if (useElevenLabsSTT) {
-      scribe.disconnect();
-    } else {
-      voiceServices.stopListening();
-    }
-    
+    voiceServices.stopListening();
     voiceServices.stopSpeaking();
     
     if (proactiveCheckTimeoutRef.current) {
@@ -357,7 +307,7 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
     setCurrentTranscript('');
     
     toast.info('Cortana stopped listening');
-  }, [scribe, useElevenLabsSTT, voiceServices]);
+  }, [voiceServices]);
 
   // Cleanup on unmount only - empty deps to prevent re-running on voiceServices changes
   useEffect(() => {
@@ -372,22 +322,13 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
     };
   }, []); // Empty deps - only run on unmount
 
-  // Sync listening state
-  useEffect(() => {
-    if (useElevenLabsSTT) {
-      setIsListening(scribe.isConnected);
-    }
-  }, [scribe.isConnected, useElevenLabsSTT]);
-
   return {
     isActive,
     isListening,
     isSpeaking: isSpeaking || voiceServices.isSpeaking,
     isProcessing,
     currentTranscript,
-    partialTranscript: useElevenLabsSTT 
-      ? scribe.partialTranscript 
-      : voiceServices.interimTranscript,
+    partialTranscript: voiceServices.interimTranscript,
     error,
     
     start,
@@ -400,7 +341,7 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
     
     // Current providers (for display)
     ttsProvider: ttsWebhook?.name || 'Browser',
-    sttProvider: sttWebhook?.name || 'Browser',
+    sttProvider: 'Browser', // Currently only browser is supported
     browserSupport: voiceServices.browserSupport,
   };
 }
