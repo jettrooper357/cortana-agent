@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useScribe, CommitStrategy } from '@elevenlabs/react';
-import { supabase } from '@/integrations/supabase/client';
 import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mic, MicOff, Settings, Loader2, Eye, Target, Clock, AlertTriangle } from 'lucide-react';
+import { Mic, MicOff, Settings, Loader2, Eye, Target, Clock } from 'lucide-react';
 import { useLifeManager } from '@/hooks/useLifeManager';
 import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
@@ -19,9 +17,7 @@ export default function LifeManagerInterface() {
   const navigate = useNavigate();
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [lastIntervention, setLastIntervention] = useState<string>('');
-  const [transcript, setTranscript] = useState<string>('');
   const [observationLog, setObservationLog] = useState<string[]>([]);
-  const [isListening, setIsListening] = useState(false);
 
   const { tasks, getPendingTasks, getOverdueTasks } = useTasks();
   const { goals } = useGoals();
@@ -50,21 +46,6 @@ export default function LifeManagerInterface() {
     },
   });
 
-  // Voice recognition setup
-  const scribe = useScribe({
-    modelId: 'scribe_v2_realtime',
-    commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data) => {
-      setTranscript(data.text);
-    },
-    onCommittedTranscript: (data) => {
-      if (data.text && data.text.trim()) {
-        lifeManager.processVoiceInput(data.text);
-      }
-      setTranscript('');
-    },
-  });
-
   // Update session state
   useEffect(() => {
     if (lifeManager.isSpeaking) {
@@ -78,49 +59,24 @@ export default function LifeManagerInterface() {
     }
   }, [lifeManager.isSpeaking, lifeManager.isProcessing, lifeManager.isActive]);
 
-  // Sync listening state
-  useEffect(() => {
-    setIsListening(scribe.isConnected);
-  }, [scribe.isConnected]);
-
   const handleStart = useCallback(async () => {
     try {
-      // Start life manager
       await lifeManager.start();
-      
-      // Start voice recognition
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      const { data, error: tokenError } = await supabase.functions.invoke('elevenlabs-scribe-token');
-      
-      if (tokenError || !data?.token) {
-        console.error('Failed to get scribe token, voice disabled');
-      } else {
-        await scribe.connect({
-          token: data.token,
-          microphone: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-      }
     } catch (err) {
       console.error('Failed to start:', err);
       toast.error('Failed to start life manager');
     }
-  }, [lifeManager, scribe]);
+  }, [lifeManager]);
 
   const handleStop = useCallback(() => {
     lifeManager.stop();
-    scribe.disconnect();
-  }, [lifeManager, scribe]);
+  }, [lifeManager]);
 
   const pendingTasks = getPendingTasks();
   const overdueTasks = getOverdueTasks();
   const activeGoals = goals.filter(g => g.status === 'active');
 
   const getStatusText = () => {
-    if (transcript) return `"${transcript}"`;
     switch (sessionState) {
       case 'observing':
         return 'Observing...';
@@ -240,11 +196,6 @@ export default function LifeManagerInterface() {
                   <p className="text-sm text-muted-foreground">
                     {lifeManager.isActive ? 'Stop Manager' : 'Start Life Manager'}
                   </p>
-                  {lifeManager.isActive && (
-                    <p className="text-xs text-ai-glow mt-1">
-                      {isListening ? 'Voice enabled' : 'Visual only'}
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
