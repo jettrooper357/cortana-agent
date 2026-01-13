@@ -88,8 +88,11 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
       throw new Error('Browser does not support speech synthesis');
     }
 
-    // Cancel any ongoing speech
+    // Cancel any ongoing speech first
     window.speechSynthesis.cancel();
+    
+    // Small delay to ensure cancel is processed
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     // Wait for voices to be loaded
     const voices = await getVoicesAsync();
@@ -118,44 +121,55 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
       
+      let keepAliveInterval: NodeJS.Timeout | null = null;
+      
+      const cleanup = () => {
+        if (keepAliveInterval) {
+          clearInterval(keepAliveInterval);
+          keepAliveInterval = null;
+        }
+        setIsSpeaking(false);
+      };
+      
       utterance.onstart = () => {
         console.log('[Browser TTS] Speech started');
         setIsSpeaking(true);
+        
+        // Chrome bug workaround: speech synthesis can pause after ~15 seconds
+        // Keep it alive with periodic resume calls
+        keepAliveInterval = setInterval(() => {
+          if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+            // Don't call resume if not paused - just check it's still going
+          } else if (window.speechSynthesis.paused) {
+            console.log('[Browser TTS] Resuming paused speech');
+            window.speechSynthesis.resume();
+          }
+        }, 3000);
       };
+      
       utterance.onend = () => {
-        console.log('[Browser TTS] Speech ended');
-        setIsSpeaking(false);
+        console.log('[Browser TTS] Speech ended successfully');
+        cleanup();
         resolve();
       };
+      
       utterance.onerror = (event) => {
         console.error('[Browser TTS] Speech error:', event.error);
-        setIsSpeaking(false);
-        reject(new Error(event.error));
+        cleanup();
+        // Don't reject on 'interrupted' or 'canceled' - these are expected when stopping
+        if (event.error === 'interrupted' || event.error === 'canceled') {
+          resolve(); // Treat as success since it was intentional
+        } else {
+          reject(new Error(event.error));
+        }
       };
       
-      // Chrome bug workaround: speech can get stuck if page is not focused
-      // Force a resume in case speech synthesis is paused
+      // Ensure speech synthesis is not paused before starting
       window.speechSynthesis.resume();
       
+      // Queue the speech
       window.speechSynthesis.speak(utterance);
       console.log('[Browser TTS] Speech queued');
-      
-      // Chrome bug workaround: speech synthesis can pause after ~15 seconds
-      // Keep it alive with periodic resume calls
-      const keepAlive = setInterval(() => {
-        if (window.speechSynthesis.speaking) {
-          window.speechSynthesis.resume();
-        } else {
-          clearInterval(keepAlive);
-        }
-      }, 5000);
-      
-      utterance.onend = () => {
-        clearInterval(keepAlive);
-        console.log('[Browser TTS] Speech ended');
-        setIsSpeaking(false);
-        resolve();
-      };
     });
   }, [getVoicesAsync]);
 
@@ -374,13 +388,28 @@ export function useVoiceServices(config: VoiceServicesConfig = {}) {
     setInterimTranscript('');
   }, []);
 
-  // Cleanup on unmount
+  // Cleanup on unmount only - use refs to avoid dependency issues
   useEffect(() => {
+    const audioRefCurrent = audioRef;
+    const recognitionRefCurrent = recognitionRef;
+    
     return () => {
-      stopSpeaking();
-      stopListening();
+      // Stop audio playback
+      if (audioRefCurrent.current) {
+        audioRefCurrent.current.pause();
+        audioRefCurrent.current = null;
+      }
+      // Cancel browser TTS
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      // Stop speech recognition
+      if (recognitionRefCurrent.current) {
+        recognitionRefCurrent.current.abort();
+        recognitionRefCurrent.current = null;
+      }
     };
-  }, [stopSpeaking, stopListening]);
+  }, []); // Empty deps - only run on mount/unmount
 
   // Check browser support
   const browserSupport = {
