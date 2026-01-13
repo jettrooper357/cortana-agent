@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSettings, WebhookSettings, VoiceProvider } from '@/hooks/useSettings';
+import { useSettings, WebhookSettings } from '@/hooks/useSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -161,7 +161,7 @@ export default function Settings() {
               Voice Settings
             </CardTitle>
             <CardDescription>
-              Configure text-to-speech and speech-to-text providers
+              Select which service to use for text-to-speech and speech-to-text
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -169,20 +169,21 @@ export default function Settings() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Volume2 className="h-4 w-4" />
-                  Text-to-Speech Provider
+                  Text-to-Speech
                 </Label>
                 <Select
-                  value={settings.voice?.ttsProvider || 'browser'}
-                  onValueChange={(value: VoiceProvider) => {
-                    updateVoiceSettings({ ttsProvider: value });
+                  value={settings.voice?.ttsWebhookId || 'browser'}
+                  onValueChange={(value: string) => {
+                    updateVoiceSettings({ ttsWebhookId: value });
+                    const webhook = settings.webhooks.find(w => w.id === value);
                     toast({
-                      title: 'TTS Provider Updated',
-                      description: `Now using ${value === 'browser' ? 'Browser (free)' : 'ElevenLabs'} for text-to-speech`,
+                      title: 'TTS Updated',
+                      description: `Now using ${value === 'browser' ? 'Browser (free)' : webhook?.name || 'selected service'} for text-to-speech`,
                     });
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select TTS provider" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="browser">
@@ -191,12 +192,16 @@ export default function Settings() {
                         <span className="text-xs text-muted-foreground">Built-in browser voices</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="elevenlabs">
-                      <div className="flex flex-col items-start">
-                        <span>ElevenLabs</span>
-                        <span className="text-xs text-muted-foreground">Premium AI voices (requires API key)</span>
-                      </div>
-                    </SelectItem>
+                    {settings.webhooks.map((webhook) => (
+                      <SelectItem key={webhook.id} value={webhook.id}>
+                        <div className="flex flex-col items-start">
+                          <span>{webhook.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {webhook.type.charAt(0).toUpperCase() + webhook.type.slice(1)}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -204,20 +209,21 @@ export default function Settings() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Mic className="h-4 w-4" />
-                  Speech-to-Text Provider
+                  Speech-to-Text
                 </Label>
                 <Select
-                  value={settings.voice?.sttProvider || 'browser'}
-                  onValueChange={(value: VoiceProvider) => {
-                    updateVoiceSettings({ sttProvider: value });
+                  value={settings.voice?.sttWebhookId || 'browser'}
+                  onValueChange={(value: string) => {
+                    updateVoiceSettings({ sttWebhookId: value });
+                    const webhook = settings.webhooks.find(w => w.id === value);
                     toast({
-                      title: 'STT Provider Updated',
-                      description: `Now using ${value === 'browser' ? 'Browser (free)' : 'ElevenLabs Scribe'} for speech recognition`,
+                      title: 'STT Updated',
+                      description: `Now using ${value === 'browser' ? 'Browser (free)' : webhook?.name || 'selected service'} for speech recognition`,
                     });
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select STT provider" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="browser">
@@ -226,24 +232,26 @@ export default function Settings() {
                         <span className="text-xs text-muted-foreground">Built-in browser speech recognition</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="elevenlabs">
-                      <div className="flex flex-col items-start">
-                        <span>ElevenLabs Scribe</span>
-                        <span className="text-xs text-muted-foreground">Premium STT (requires API key)</span>
-                      </div>
-                    </SelectItem>
+                    {settings.webhooks.filter(w => w.type === 'elevenlabs').map((webhook) => (
+                      <SelectItem key={webhook.id} value={webhook.id}>
+                        <div className="flex flex-col items-start">
+                          <span>{webhook.name}</span>
+                          <span className="text-xs text-muted-foreground">ElevenLabs Scribe</span>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                <strong>Browser voices</strong> are free and work offline, but quality varies by device.
-                <br />
-                <strong>ElevenLabs</strong> provides premium AI voices but requires an API key configured in your webhooks.
-              </p>
-            </div>
+            {settings.webhooks.length === 0 && (
+              <div className="p-4 bg-muted/50 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>No webhooks configured.</strong> Add a webhook below to enable premium AI voices from ElevenLabs or other services.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

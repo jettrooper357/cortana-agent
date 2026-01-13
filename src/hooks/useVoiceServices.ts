@@ -1,13 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import type { WebhookSettings } from '@/hooks/useSettings';
 
-export type VoiceProvider = 'browser' | 'elevenlabs';
-
+// Config now accepts webhook configs instead of just provider types
 interface VoiceServicesConfig {
-  ttsProvider: VoiceProvider;
-  sttProvider: VoiceProvider;
-  elevenLabsVoiceId?: string;
+  ttsWebhook?: WebhookSettings | null; // null or undefined = browser
+  sttWebhook?: WebhookSettings | null; // null or undefined = browser
 }
 
 interface SpeechRecognitionEvent extends Event {
@@ -39,16 +37,9 @@ const getSpeechRecognition = (): (new () => SpeechRecognition) | undefined => {
   return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 };
 
-const DEFAULT_CONFIG: VoiceServicesConfig = {
-  ttsProvider: 'browser',
-  sttProvider: 'browser',
-};
-
-export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
-  // Use refs to always have current config values in callbacks
-  const ttsProvider = config.ttsProvider ?? 'browser';
-  const sttProvider = config.sttProvider ?? 'browser';
-  const elevenLabsVoiceId = config.elevenLabsVoiceId;
+export function useVoiceServices(config: VoiceServicesConfig = {}) {
+  const ttsWebhook = config.ttsWebhook;
+  const sttWebhook = config.sttWebhook;
   
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -107,8 +98,8 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
     });
   }, []);
 
-  // ElevenLabs TTS
-  const speakWithElevenLabs = useCallback(async (text: string, voiceId?: string): Promise<void> => {
+  // ElevenLabs TTS - now accepts webhook config
+  const speakWithElevenLabs = useCallback(async (text: string, webhook?: WebhookSettings | null): Promise<void> => {
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
@@ -119,7 +110,11 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ text, voiceId }),
+          body: JSON.stringify({ 
+            text, 
+            apiKey: webhook?.apiKey,
+            voiceId: webhook?.agentId, // Use agentId as voiceId for TTS
+          }),
         }
       );
 
@@ -157,15 +152,21 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
     }
   }, []);
 
-  // Main speak function
+  // Main speak function - uses webhook config to determine provider
   const speak = useCallback(async (text: string): Promise<void> => {
     if (!text.trim()) return;
     
     setError(null);
     
     try {
-      if (ttsProvider === 'elevenlabs') {
-        await speakWithElevenLabs(text, elevenLabsVoiceId);
+      // If we have a TTS webhook configured, use it based on type
+      if (ttsWebhook) {
+        if (ttsWebhook.type === 'elevenlabs') {
+          await speakWithElevenLabs(text, ttsWebhook);
+        } else {
+          // For other webhook types, fall back to browser for now
+          await speakWithBrowser(text);
+        }
       } else {
         await speakWithBrowser(text);
       }
@@ -173,9 +174,9 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
       const errorMsg = err instanceof Error ? err.message : 'TTS failed';
       setError(errorMsg);
       
-      // Fallback to browser if ElevenLabs fails
-      if (ttsProvider === 'elevenlabs') {
-        console.warn('ElevenLabs TTS failed, falling back to browser:', err);
+      // Fallback to browser if webhook TTS fails
+      if (ttsWebhook) {
+        console.warn(`${ttsWebhook.name} TTS failed, falling back to browser:`, err);
         try {
           await speakWithBrowser(text);
         } catch (fallbackErr) {
@@ -183,7 +184,7 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
         }
       }
     }
-  }, [ttsProvider, elevenLabsVoiceId, speakWithBrowser, speakWithElevenLabs]);
+  }, [ttsWebhook, speakWithBrowser, speakWithElevenLabs]);
 
   // Stop speaking
   const stopSpeaking = useCallback(() => {
@@ -279,7 +280,7 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
     return startBrowserListening(onTranscript);
   }, [startBrowserListening]);
 
-  // Main listen function
+  // Main listen function - uses webhook config to determine provider
   const startListening = useCallback(async (
     onTranscript: (text: string, isFinal: boolean) => void
   ): Promise<void> => {
@@ -288,7 +289,8 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
     setInterimTranscript('');
     
     try {
-      if (sttProvider === 'elevenlabs') {
+      // If we have an STT webhook configured, use it based on type
+      if (sttWebhook && sttWebhook.type === 'elevenlabs') {
         await startElevenLabsListening(onTranscript);
       } else {
         await startBrowserListening(onTranscript);
@@ -299,7 +301,7 @@ export function useVoiceServices(config: Partial<VoiceServicesConfig> = {}) {
       toast.error(errorMsg);
       throw err;
     }
-  }, [sttProvider, startBrowserListening, startElevenLabsListening]);
+  }, [sttWebhook, startBrowserListening, startElevenLabsListening]);
 
   // Stop listening
   const stopListening = useCallback(() => {
