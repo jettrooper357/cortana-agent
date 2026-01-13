@@ -449,14 +449,14 @@ export default function Settings() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>TTS Voice (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                            <Select onValueChange={(val) => field.onChange(val === 'none' ? '' : val)} value={field.value || 'none'}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Use browser TTS" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="">Browser TTS (Default)</SelectItem>
+                                <SelectItem value="none">Browser TTS (Default)</SelectItem>
                                 {settings.webhooks.filter(w => w.type === 'elevenlabs').map((webhook) => (
                                   <SelectItem key={webhook.id} value={webhook.id}>
                                     {webhook.name} (ElevenLabs)
