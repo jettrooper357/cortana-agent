@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon, Volume2, Mic } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings as SettingsIcon, Volume2, Mic, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -31,6 +32,7 @@ export default function Settings() {
   const { settings, saveWebhook, deleteWebhook, clearAllSettings, updateVoiceSettings } = useSettings();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [isWebhookFormOpen, setIsWebhookFormOpen] = useState(false);
 
   const form = useForm<WebhookFormData>({
     resolver: zodResolver(webhookSchema),
@@ -256,167 +258,178 @@ export default function Settings() {
         </Card>
 
         {/* Webhook Configuration */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5" />
-              {isEditing ? 'Edit Webhook' : 'Add New Webhook'}
-            </CardTitle>
-            <CardDescription>
-              Configure your AI voice assistant connections
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="My AI Assistant" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          A friendly name for this webhook
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select webhook type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                            <SelectItem value="openai">OpenAI</SelectItem>
-                            <SelectItem value="custom">Custom</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          Choose the AI service provider
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {watchedType === 'elevenlabs' && (
-                    <FormField
-                      control={form.control}
-                      name="agentId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Agent ID</FormLabel>
-                          <FormControl>
-                            <Input placeholder="agent_01jzp3zn2dek1vk4ztygtxzna6" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            Your ElevenLabs agent ID
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  {(watchedType === 'openai' || watchedType === 'elevenlabs') && (
-                    <FormField
-                      control={form.control}
-                      name="apiKey"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>API Key</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="password" 
-                              placeholder="sk-..." 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Your API key for {watchedType === 'openai' ? 'OpenAI' : 'ElevenLabs'}
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  {watchedType === 'custom' && (
-                    <FormField
-                      control={form.control}
-                      name="webhookUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Webhook URL</FormLabel>
-                          <FormControl>
-                            <Input placeholder="https://api.example.com/webhook" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            Your custom webhook endpoint URL
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  <FormField
-                    control={form.control}
-                    name="isActive"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Active</FormLabel>
-                          <FormDescription>
-                            Set this webhook as the active one
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+        <Collapsible open={isWebhookFormOpen || !!isEditing} onOpenChange={setIsWebhookFormOpen}>
+          <Card className="mb-8">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Plus className="h-5 w-5" />
+                      {isEditing ? 'Edit Webhook' : 'Add New Webhook'}
+                    </CardTitle>
+                    <CardDescription>
+                      Configure your AI voice assistant connections
+                    </CardDescription>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${isWebhookFormOpen || isEditing ? 'rotate-180' : ''}`} />
                 </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="My AI Assistant" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              A friendly name for this webhook
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                <div className="flex gap-4">
-                  <Button type="submit">
-                    {isEditing ? 'Update Webhook' : 'Add Webhook'}
-                  </Button>
-                  {isEditing && (
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => {
-                        setIsEditing(null);
-                        form.reset();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+                      <FormField
+                        control={form.control}
+                        name="type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Type</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select webhook type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                                <SelectItem value="openai">OpenAI</SelectItem>
+                                <SelectItem value="custom">Custom</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Choose the AI service provider
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {watchedType === 'elevenlabs' && (
+                        <FormField
+                          control={form.control}
+                          name="agentId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Agent ID</FormLabel>
+                              <FormControl>
+                                <Input placeholder="agent_01jzp3zn2dek1vk4ztygtxzna6" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                Your ElevenLabs agent ID
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {(watchedType === 'openai' || watchedType === 'elevenlabs') && (
+                        <FormField
+                          control={form.control}
+                          name="apiKey"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>API Key</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="password" 
+                                  placeholder="sk-..." 
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Your API key for {watchedType === 'openai' ? 'OpenAI' : 'ElevenLabs'}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {watchedType === 'custom' && (
+                        <FormField
+                          control={form.control}
+                          name="webhookUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Webhook URL</FormLabel>
+                              <FormControl>
+                                <Input placeholder="https://api.example.com/webhook" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                Your custom webhook endpoint URL
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      <FormField
+                        control={form.control}
+                        name="isActive"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">Active</FormLabel>
+                              <FormDescription>
+                                Set this webhook as the active one
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex gap-4">
+                      <Button type="submit">
+                        {isEditing ? 'Update Webhook' : 'Add Webhook'}
+                      </Button>
+                      {isEditing && (
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => {
+                            setIsEditing(null);
+                            form.reset();
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+                </Form>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Existing Webhooks */}
         {settings.webhooks.length > 0 && (
