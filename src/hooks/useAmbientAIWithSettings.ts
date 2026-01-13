@@ -359,16 +359,18 @@ export function useAmbientAIWithSettings(config: AmbientAIConfig = {}) {
     toast.info('Cortana stopped listening');
   }, [scribe, useElevenLabsSTT, voiceServices]);
 
-  // Cleanup
+  // Cleanup on unmount only - empty deps to prevent re-running on voiceServices changes
   useEffect(() => {
     return () => {
-      voiceServices.stopSpeaking();
-      voiceServices.stopListening();
+      // Use window.speechSynthesis directly to avoid dependency on voiceServices
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       if (proactiveCheckTimeoutRef.current) {
         clearTimeout(proactiveCheckTimeoutRef.current);
       }
     };
-  }, [voiceServices]);
+  }, []); // Empty deps - only run on unmount
 
   // Sync listening state
   useEffect(() => {
