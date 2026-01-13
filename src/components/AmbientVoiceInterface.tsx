@@ -3,12 +3,10 @@ import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, MicOff, Settings, Volume2, Loader2, MessageSquare, User, Bot } from 'lucide-react';
+import { Mic, MicOff, Settings, Volume2, Loader2, MessageSquare, User, Bot, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAmbientAIWithSettings } from '@/hooks/useAmbientAIWithSettings';
+import { useGeminiLiveAudio, SessionState } from '@/hooks/useGeminiLiveAudio';
 import cortanaAI from '@/assets/cortana-ai.jpg';
-
-type SessionState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 interface ConversationEntry {
   id: string;
@@ -19,33 +17,33 @@ interface ConversationEntry {
 
 export default function AmbientVoiceInterface() {
   const navigate = useNavigate();
-  const [sessionState, setSessionState] = useState<SessionState>('idle');
-  const [lastResponse, setLastResponse] = useState<string>('');
-  const [transcript, setTranscript] = useState<string>('');
   const [conversationLog, setConversationLog] = useState<ConversationEntry[]>([]);
   const [showLog, setShowLog] = useState(true);
+  const [lastTranscript, setLastTranscript] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const ambientAI = useAmbientAIWithSettings({
-    onSpeaking: (speaking) => {
-      setSessionState(speaking ? 'speaking' : 'listening');
+  const geminiLive = useGeminiLiveAudio({
+    systemInstruction: `You are Cortana, an AI home guardian and personal assistant.
+You observe the home through sensors and conversation.
+Be concise, warm, and helpful - responses will be spoken aloud.
+Keep responses under 2 sentences when possible.
+Use natural, conversational language.
+If asked about your capabilities, mention you can help with goals, tasks, and home automation.`,
+    onStateChange: (state) => {
+      console.log('Gemini Live state:', state);
     },
     onTranscript: (text, isFinal) => {
-      setTranscript(text);
+      setLastTranscript(text);
       if (isFinal && text.trim()) {
-        // Add user message to log
         setConversationLog(prev => [...prev, {
           id: crypto.randomUUID(),
           role: 'user',
           content: text.trim(),
           timestamp: new Date(),
         }]);
-        setSessionState('processing');
       }
     },
     onResponse: (response) => {
-      setLastResponse(response);
-      // Add assistant response to log
       setConversationLog(prev => [...prev, {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -53,8 +51,8 @@ export default function AmbientVoiceInterface() {
         timestamp: new Date(),
       }]);
     },
-    onAlert: (level, message) => {
-      console.log(`[ALERT ${level}] ${message}`);
+    onError: (error) => {
+      console.error('Gemini Live error:', error);
     },
   });
 
@@ -65,32 +63,21 @@ export default function AmbientVoiceInterface() {
     }
   }, [conversationLog]);
 
-  // Update session state based on ambient AI state
-  useEffect(() => {
-    if (ambientAI.isSpeaking) {
-      setSessionState('speaking');
-    } else if (ambientAI.isProcessing) {
-      setSessionState('processing');
-    } else if (ambientAI.isListening) {
-      setSessionState('listening');
-    } else {
-      setSessionState('idle');
-    }
-  }, [ambientAI.isSpeaking, ambientAI.isProcessing, ambientAI.isListening]);
-
   const handleToggle = () => {
-    if (ambientAI.isActive) {
-      ambientAI.stop();
+    if (geminiLive.isActive) {
+      geminiLive.stop();
     } else {
-      ambientAI.start();
+      geminiLive.start();
     }
   };
 
   const getStatusText = () => {
-    if (transcript && sessionState === 'listening') {
-      return `"${transcript}"`;
+    if (lastTranscript && geminiLive.state === 'listening') {
+      return `"${lastTranscript}"`;
     }
-    switch (sessionState) {
+    switch (geminiLive.state) {
+      case 'connecting':
+        return 'Connecting...';
       case 'listening':
         return 'Listening...';
       case 'processing':
@@ -103,7 +90,9 @@ export default function AmbientVoiceInterface() {
   };
 
   const getStatusColor = () => {
-    switch (sessionState) {
+    switch (geminiLive.state) {
+      case 'connecting':
+        return 'text-ai-pulse border-ai-pulse animate-pulse';
       case 'listening':
         return 'text-ai-glow border-ai-glow';
       case 'processing':
@@ -135,7 +124,7 @@ export default function AmbientVoiceInterface() {
           {/* Enhanced Holographic Cortana Overlay when Speaking */}
           <div
             className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-out ${
-              sessionState === 'speaking'
+              geminiLive.state === 'speaking'
                 ? 'opacity-80 scale-110 animate-pulse-glow'
                 : 'opacity-0 scale-95'
             }`}
@@ -146,96 +135,100 @@ export default function AmbientVoiceInterface() {
             }}
           />
 
-        {/* Multi-layered Synthesized Halo Effects */}
-        <div
-          className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
-            sessionState === 'speaking' ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <div className="relative">
-            <div className="w-40 h-40 rounded-full bg-ai-glow/20 animate-ping" />
-            <div className="absolute inset-0 w-40 h-40 rounded-full bg-gradient-to-r from-ai-glow/15 to-transparent animate-spin" />
-          </div>
-          <div className="absolute">
-            <div
-              className="w-32 h-32 rounded-full bg-ai-glow/30 animate-ping"
-              style={{ animationDelay: '0.3s' }}
-            />
-          </div>
-          <div className="absolute">
-            <div className="w-24 h-24 rounded-full bg-ai-glow/40 animate-pulse" />
-          </div>
-        </div>
-
-        {/* Glowing Ring Effect */}
-        <GlowingRing isActive={sessionState === 'speaking'} size={300} />
-
-        {/* Listening Indicator */}
-        {sessionState === 'listening' && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="relative">
-              <div className="w-48 h-48 rounded-full border-2 border-ai-glow/30 animate-pulse" />
-              <div className="absolute inset-4 w-40 h-40 rounded-full border border-ai-glow/50 animate-ping" style={{ animationDuration: '2s' }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Volume2 className="w-8 h-8 text-ai-glow/50 animate-pulse" />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Last Response Display */}
-        {lastResponse && sessionState !== 'speaking' && (
-          <div className="absolute top-24 left-1/2 transform -translate-x-1/2 max-w-md px-4">
-            <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-xl p-4 shadow-card">
-              <p className="text-sm text-muted-foreground italic">"{lastResponse}"</p>
-            </div>
-          </div>
-        )}
-
-        {/* Status Indicator */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+          {/* Multi-layered Synthesized Halo Effects */}
           <div
-            className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-300 bg-gradient-card/95 backdrop-blur-sm max-w-xs truncate ${getStatusColor()}`}
+            className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
+              geminiLive.state === 'speaking' ? 'opacity-100' : 'opacity-0'
+            }`}
           >
-            {sessionState === 'processing' && (
-              <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
-            )}
-            {getStatusText()}
+            <div className="relative">
+              <div className="w-40 h-40 rounded-full bg-ai-glow/20 animate-ping" />
+              <div className="absolute inset-0 w-40 h-40 rounded-full bg-gradient-to-r from-ai-glow/15 to-transparent animate-spin" />
+            </div>
+            <div className="absolute">
+              <div
+                className="w-32 h-32 rounded-full bg-ai-glow/30 animate-ping"
+                style={{ animationDelay: '0.3s' }}
+              />
+            </div>
+            <div className="absolute">
+              <div className="w-24 h-24 rounded-full bg-ai-glow/40 animate-pulse" />
+            </div>
           </div>
-        </div>
 
-        {/* Activation Button */}
-        <div className="absolute bottom-4 right-4">
-          <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-6">
-            <div className="flex flex-col items-center space-y-4">
-              <Button
-                onClick={handleToggle}
-                className={`w-20 h-20 rounded-full border-2 transition-all duration-300 ${
-                  ambientAI.isActive
-                    ? 'bg-voice-active border-voice-active hover:bg-voice-active/80'
-                    : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
-                }`}
-              >
-                {ambientAI.isActive ? (
-                  <MicOff className="w-8 h-8" />
-                ) : (
-                  <Mic className="w-8 h-8" />
-                )}
-              </Button>
+          {/* Glowing Ring Effect */}
+          <GlowingRing isActive={geminiLive.state === 'speaking'} size={300} />
 
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">
-                  {ambientAI.isActive ? 'Stop Listening' : 'Start Ambient AI'}
-                </p>
-                {ambientAI.isActive && (
-                  <p className="text-xs text-ai-glow mt-1">
-                    {ambientAI.sttProvider === 'elevenlabs' ? 'ElevenLabs' : 'Browser'} STT
+          {/* Listening Indicator */}
+          {geminiLive.state === 'listening' && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative">
+                <div className="w-48 h-48 rounded-full border-2 border-ai-glow/30 animate-pulse" />
+                <div className="absolute inset-4 w-40 h-40 rounded-full border border-ai-glow/50 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Volume2 className="w-8 h-8 text-ai-glow/50 animate-pulse" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Processing Indicator */}
+          {geminiLive.state === 'processing' && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative">
+                <div className="w-32 h-32 rounded-full border-2 border-ai-pulse/50 animate-spin" style={{ animationDuration: '2s' }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Zap className="w-8 h-8 text-ai-pulse animate-pulse" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Status Indicator */}
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+            <div
+              className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-300 bg-gradient-card/95 backdrop-blur-sm max-w-xs truncate ${getStatusColor()}`}
+            >
+              {geminiLive.state === 'processing' && (
+                <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
+              )}
+              {getStatusText()}
+            </div>
+          </div>
+
+          {/* Activation Button */}
+          <div className="absolute bottom-4 right-4">
+            <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-6">
+              <div className="flex flex-col items-center space-y-4">
+                <Button
+                  onClick={handleToggle}
+                  className={`w-20 h-20 rounded-full border-2 transition-all duration-300 ${
+                    geminiLive.isActive
+                      ? 'bg-voice-active border-voice-active hover:bg-voice-active/80'
+                      : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
+                  }`}
+                >
+                  {geminiLive.isActive ? (
+                    <MicOff className="w-8 h-8" />
+                  ) : (
+                    <Mic className="w-8 h-8" />
+                  )}
+                </Button>
+
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {geminiLive.isActive ? 'Stop Listening' : 'Start Gemini Live'}
                   </p>
-                )}
+                  {geminiLive.isActive && (
+                    <p className="text-xs text-ai-glow mt-1 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      Gemini AI
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
           {/* Settings Button */}
           <div className="absolute bottom-4 left-4 flex gap-2">
@@ -270,7 +263,10 @@ export default function AmbientVoiceInterface() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setConversationLog([])}
+                  onClick={() => {
+                    setConversationLog([]);
+                    geminiLive.clearHistory();
+                  }}
                   className="text-xs text-muted-foreground hover:text-foreground"
                 >
                   Clear
@@ -281,10 +277,13 @@ export default function AmbientVoiceInterface() {
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
               {conversationLog.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                  <MessageSquare className="w-12 h-12 text-muted-foreground/30 mb-4" />
-                  <p className="text-sm text-muted-foreground">No conversation yet</p>
+                  <Zap className="w-12 h-12 text-ai-glow/30 mb-4" />
+                  <p className="text-sm text-muted-foreground">Gemini Live Audio</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Start speaking to begin
+                    Real-time voice conversation
+                  </p>
+                  <p className="text-xs text-ai-glow mt-3">
+                    Click the mic to begin
                   </p>
                 </div>
               ) : (
