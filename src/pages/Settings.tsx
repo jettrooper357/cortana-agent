@@ -20,6 +20,7 @@ const webhookSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   type: z.enum(['elevenlabs', 'openai', 'custom']),
   agentId: z.string().optional(),
+  voiceId: z.string().optional(), // For ElevenLabs TTS (separate from agentId)
   apiKey: z.string().optional(),
   webhookUrl: z.string().optional(),
   isActive: z.boolean().default(false)
@@ -61,6 +62,7 @@ export default function Settings() {
       name: '',
       type: 'elevenlabs',
       agentId: '',
+      voiceId: '',
       apiKey: '',
       webhookUrl: '',
       isActive: false
@@ -82,10 +84,11 @@ export default function Settings() {
   // Submit webhook
   const handleWebhookSubmit = (data: WebhookFormData) => {
     try {
-      if (data.type === 'elevenlabs' && !data.agentId?.trim()) {
+      // ElevenLabs requires at least one of agentId or voiceId
+      if (data.type === 'elevenlabs' && !data.agentId?.trim() && !data.voiceId?.trim()) {
         toast({
           title: "Validation Error",
-          description: "Voice ID is required for ElevenLabs webhooks",
+          description: "At least Agent ID or Voice ID is required for ElevenLabs webhooks",
           variant: "destructive",
         });
         return;
@@ -114,6 +117,7 @@ export default function Settings() {
         name: data.name,
         type: data.type,
         agentId: data.agentId,
+        voiceId: data.voiceId,
         apiKey: data.apiKey,
         webhookUrl: data.webhookUrl,
         isActive: data.isActive
@@ -187,6 +191,7 @@ export default function Settings() {
       name: webhook.name,
       type: webhook.type,
       agentId: webhook.agentId || '',
+      voiceId: webhook.voiceId || '',
       apiKey: webhook.apiKey || '',
       webhookUrl: webhook.webhookUrl || '',
       isActive: webhook.isActive
@@ -652,22 +657,40 @@ export default function Settings() {
                       />
 
                       {watchedWebhookType === 'elevenlabs' && (
-                        <FormField
-                          control={webhookForm.control}
-                          name="agentId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Voice ID / Agent ID</FormLabel>
-                              <FormControl>
-                                <Input placeholder="JBFqnCBsd6RMkjVDRZzb" {...field} />
-                              </FormControl>
-                              <FormDescription>
-                                For TTS: Voice ID. For Agent: Agent ID
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        <>
+                          <FormField
+                            control={webhookForm.control}
+                            name="agentId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Agent ID (for Conversational AI)</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="agent_01abc..." {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                  ElevenLabs Agent ID for real-time conversation
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={webhookForm.control}
+                            name="voiceId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Voice ID (for TTS)</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="JBFqnCBsd6RMkjVDRZzb" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                  Voice ID for text-to-speech output (e.g., "Sarah" = EXAVITQu4vr4xnSDxMaL)
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </>
                       )}
 
                       {watchedWebhookType === 'openai' && (

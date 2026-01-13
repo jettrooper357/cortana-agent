@@ -10,7 +10,8 @@ export interface WebhookSettings {
   id: string;
   name: string;
   type: WebhookType;
-  agentId?: string;
+  agentId?: string; // For ElevenLabs conversational agents
+  voiceId?: string; // For ElevenLabs TTS voices (different from agentId!)
   apiKey?: string;
   webhookUrl?: string;
   isActive: boolean;
