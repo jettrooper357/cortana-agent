@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useConversation } from '@11labs/react';
 import CortanaHeader from '@/components/CortanaHeader';
 import GlowingRing from '@/components/GlowingRing';
 import { useWakeWord } from '@/hooks/useWakeWord';
-import { useSettings } from '@/hooks/useSettings';
+import { useUnifiedVoice } from '@/hooks/useUnifiedVoice';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -12,99 +11,61 @@ import cortanaAI from '@/assets/cortana-ai.jpg';
 type SessionState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export default function VoiceInterface() {
-  const conversation = useConversation();
   const navigate = useNavigate();
-  const { getActiveWebhook } = useSettings();
   const [sessionState, setSessionState] = useState<SessionState>('idle');
-  const [isSessionActive, setIsSessionActive] = useState(false);
   const isActivatingRef = useRef(false);
   
-  // Use ElevenLabs React SDK for reliable speaking detection
-  const isCortanaSpeaking = conversation.isSpeaking || false;
+  // Use the unified voice hook that handles all provider switching
+  const unifiedVoice = useUnifiedVoice({
+    onStateChange: (state) => {
+      setSessionState(state === 'connecting' ? 'processing' : state);
+    },
+    onError: (error) => {
+      console.error('Voice error:', error);
+    },
+  });
 
   // Handle Cortana activation
   const activateCortana = useCallback(async () => {
-    if (isActivatingRef.current || isSessionActive) {
+    if (isActivatingRef.current || unifiedVoice.isActive) {
       console.log('Activation already in progress or session active, skipping...');
       return;
     }
     
-    console.log('=== CORTANA ACTIVATION DEBUG ===');
-    const activeWebhook = getActiveWebhook();
-    console.log('Active webhook:', activeWebhook);
-    
-    if (!activeWebhook) {
-      console.error('❌ No active webhook found - redirecting to settings');
-      navigate('/settings');
-      return;
-    }
-    
-    if (!activeWebhook.agentId) {
-      console.error('❌ Active webhook missing Agent ID:', activeWebhook);
-      console.error('Agent ID value:', activeWebhook.agentId);
-      navigate('/settings');
-      return;
-    }
-    
-    if (activeWebhook.type === 'elevenlabs' && !activeWebhook.apiKey) {
-      console.error('❌ ElevenLabs webhook missing API key');
-      navigate('/settings');
-      return;
-    }
-    
-    console.log('✅ Webhook validation passed - proceeding with activation');
-    console.log('Using Agent ID:', activeWebhook.agentId);
+    console.log('=== CORTANA ACTIVATION ===');
+    console.log('Using provider:', unifiedVoice.providerName);
     
     isActivatingRef.current = true;
     try {
-      console.log('🚀 Starting Cortana session...');
-      setSessionState('processing');
-      
-      await conversation.startSession({ 
-        agentId: activeWebhook.agentId 
-      });
-      
-      setIsSessionActive(true);
-      setSessionState('listening');
-      console.log('✅ Cortana session activated successfully');
+      await unifiedVoice.start();
     } catch (error) {
-      console.error('❌ Failed to activate Cortana session:', error);
+      console.error('Failed to activate Cortana:', error);
       setSessionState('idle');
     } finally {
       isActivatingRef.current = false;
     }
-  }, [conversation, isSessionActive, getActiveWebhook, navigate]);
+  }, [unifiedVoice]);
 
   // Handle session deactivation
   const deactivateCortana = useCallback(async () => {
     try {
-      await conversation.endSession();
-      setIsSessionActive(false);
+      await unifiedVoice.stop();
       setSessionState('idle');
       console.log('Cortana session deactivated');
     } catch (error) {
       console.error('Failed to deactivate Cortana session:', error);
     }
-  }, [conversation]);
+  }, [unifiedVoice]);
 
   // Wake word detection
   const { isListening: isWakeWordListening } = useWakeWord({
     onWakeWordDetected: activateCortana,
-    isEnabled: !isSessionActive
+    isEnabled: !unifiedVoice.isActive
   });
-
-  // Update session state based on speaking
-  useEffect(() => {
-    if (isCortanaSpeaking && isSessionActive) {
-      setSessionState('speaking');
-    } else if (isSessionActive && !isCortanaSpeaking) {
-      setSessionState('listening');
-    }
-  }, [isCortanaSpeaking, isSessionActive]);
 
   // Session timeout (auto-deactivate after 30 seconds of inactivity)
   useEffect(() => {
-    if (!isSessionActive || sessionState === 'speaking') return;
+    if (!unifiedVoice.isActive || sessionState === 'speaking') return;
     
     const timeout = setTimeout(() => {
       console.log('Session timeout - deactivating Cortana');
@@ -112,12 +73,12 @@ export default function VoiceInterface() {
     }, 30000);
     
     return () => clearTimeout(timeout);
-  }, [sessionState, isSessionActive, deactivateCortana]);
+  }, [sessionState, unifiedVoice.isActive, deactivateCortana]);
 
   // Get status text based on current state
   const getStatusText = () => {
     switch (sessionState) {
-      case 'listening': return 'Listening...';
+      case 'listening': return `Listening... (${unifiedVoice.providerName})`;
       case 'processing': return 'Activating...';
       case 'speaking': return 'Speaking...';
       default: return 'Ready';
@@ -201,15 +162,15 @@ export default function VoiceInterface() {
           <div className="bg-gradient-card/95 backdrop-blur-sm border border-border rounded-2xl shadow-card p-6">
             <div className="flex flex-col items-center space-y-4">
               <Button
-                onClick={isSessionActive ? deactivateCortana : activateCortana}
+                onClick={unifiedVoice.isActive ? deactivateCortana : activateCortana}
                 disabled={sessionState === 'processing'}
                 className={`w-20 h-20 rounded-full border-2 transition-all duration-300 ${
-                  isSessionActive
+                  unifiedVoice.isActive
                     ? 'bg-voice-active border-voice-active hover:bg-voice-active/80' 
                     : 'bg-secondary border-voice-inactive hover:border-ai-glow hover:shadow-glow'
                 }`}
               >
-                {isSessionActive ? (
+                {unifiedVoice.isActive ? (
                   <MicOff className="w-8 h-8" />
                 ) : (
                   <Mic className="w-8 h-8" />
@@ -218,7 +179,7 @@ export default function VoiceInterface() {
               
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">
-                  {isSessionActive ? 'End Session' : 'Activate Cortana'}
+                  {unifiedVoice.isActive ? 'End Session' : 'Activate Cortana'}
                 </p>
               </div>
             </div>

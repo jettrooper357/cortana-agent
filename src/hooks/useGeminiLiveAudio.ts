@@ -91,14 +91,14 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     isSpeakingRef.current = true;
     updateState('speaking');
 
-    const ttsWebhookId = settings.voice?.ttsWebhookId;
+    const ttsProvider = settings.voice?.ttsProvider;
     
-    // Check if we should use ElevenLabs (when ttsWebhookId is set to a webhook ID, not 'browser')
-    const ttsWebhook = ttsWebhookId && ttsWebhookId !== 'browser' 
-      ? settings.webhooks?.find(w => w.id === ttsWebhookId) 
+    // Check if we should use ElevenLabs (when ttsProvider is set to a webhook ID, not 'browser' or 'gemini')
+    const ttsWebhook = ttsProvider && ttsProvider !== 'browser' && ttsProvider !== 'gemini'
+      ? settings.webhooks?.find(w => w.id === ttsProvider) 
       : null;
     
-    console.log('[Gemini Live] TTS setting:', ttsWebhookId, 'Webhook:', ttsWebhook?.name);
+    console.log('[Gemini Live] TTS setting:', ttsProvider, 'Webhook:', ttsWebhook?.name);
     
     if (ttsWebhook?.type === 'elevenlabs') {
       try {
@@ -213,7 +213,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
         window.speechSynthesis.speak(utterance);
       }, 100);
     });
-  }, [isActive, updateState, settings.voice?.ttsWebhookId, settings.webhooks]);
+  }, [isActive, updateState, settings.voice?.ttsProvider, settings.webhooks]);
 
   // Process transcript with Gemini
   const processTranscript = useCallback(async (transcript: string) => {
