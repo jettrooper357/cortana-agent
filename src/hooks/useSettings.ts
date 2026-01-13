@@ -66,8 +66,14 @@ export const useSettings = () => {
             loadFromLocalStorage();
           } else if (data) {
             const dbSettings = data.settings as unknown as AppSettings;
-            setSettings(dbSettings);
-            console.log('Settings loaded from database:', dbSettings);
+            // Ensure voice settings have defaults merged
+            const mergedSettings: AppSettings = {
+              ...DEFAULT_SETTINGS,
+              ...dbSettings,
+              voice: { ...DEFAULT_VOICE_SETTINGS, ...(dbSettings.voice || {}) },
+            };
+            setSettings(mergedSettings);
+            console.log('Settings loaded from database (merged):', mergedSettings);
           } else {
             // No settings in database, check localStorage for migration
             const localSettings = loadFromLocalStorage();
@@ -236,12 +242,24 @@ export const useSettings = () => {
 
   // Update voice settings
   const updateVoiceSettings = useCallback(async (voice: Partial<VoiceSettings>) => {
-    const newSettings = {
-      ...settings,
-      voice: { ...settings.voice, ...voice },
-    };
-    await saveSettings(newSettings);
-  }, [settings, saveSettings]);
+    console.log('updateVoiceSettings called with:', voice);
+    
+    setSettings(prev => {
+      const newSettings: AppSettings = {
+        ...prev,
+        voice: { ...DEFAULT_VOICE_SETTINGS, ...prev.voice, ...voice },
+      };
+      console.log('Saving new voice settings:', newSettings.voice);
+      
+      // Save asynchronously to both localStorage and database
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+      if (user) {
+        saveToDatabase(newSettings);
+      }
+      
+      return newSettings;
+    });
+  }, [user]);
 
   return {
     settings,
