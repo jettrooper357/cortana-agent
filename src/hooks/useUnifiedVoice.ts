@@ -13,6 +13,8 @@ interface UnifiedVoiceConfig {
   onResponse?: (text: string) => void;
   onError?: (error: string) => void;
   systemInstruction?: string;
+  // Function to get current app context (tasks, goals, etc.) for AI
+  getAppContext?: () => string;
 }
 
 /**
@@ -28,11 +30,51 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
   const { settings, getVoiceProviderConfig } = useSettings();
   const [activeMode, setActiveMode] = useState<'gemini-live' | 'gemini-fallback' | 'elevenlabs-agent' | 'browser'>('gemini-fallback');
   
+  // Build the full system instruction with app context
+  const buildSystemInstruction = useCallback(() => {
+    const baseInstruction = config.systemInstruction || `You are Cortana, an AI assistant. 
+Be concise, warm, and helpful.
+Keep responses under 2 sentences when possible.
+Use natural, conversational language.`;
+
+    const appContext = config.getAppContext?.() || '';
+    
+    if (appContext) {
+      return `${baseInstruction}
+
+## Current App Context
+${appContext}
+
+Use this context to provide relevant, personalized assistance. Reference specific tasks, goals, and rules when helpful.`;
+    }
+    
+    return baseInstruction;
+  }, [config]);
+  
   // ElevenLabs agent conversation hook
   const elevenLabsConversation = useConversation({
     onConnect: () => {
       console.log('[UnifiedVoice] ElevenLabs agent connected');
       config.onStateChange?.('listening');
+      
+      // Send initial context update after connection
+      const appContext = config.getAppContext?.();
+      if (appContext) {
+        console.log('[UnifiedVoice] Sending context to ElevenLabs agent');
+        // Use sendContextualUpdate to inject context without triggering response
+        setTimeout(() => {
+          try {
+            elevenLabsConversation.sendContextualUpdate(
+              `Here is the current context about the user's tasks, goals, and home:
+${appContext}
+
+Use this information to provide relevant assistance.`
+            );
+          } catch (err) {
+            console.warn('[UnifiedVoice] Failed to send context update:', err);
+          }
+        }, 500); // Small delay to ensure connection is stable
+      }
     },
     onDisconnect: () => {
       console.log('[UnifiedVoice] ElevenLabs agent disconnected');
@@ -44,6 +86,14 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
     },
     onMessage: (message) => {
       console.log('[UnifiedVoice] ElevenLabs message:', message);
+      // Handle transcripts and responses based on message structure
+      // The @11labs/react SDK returns messages with 'source' property
+      const msg = message as any;
+      if (msg.source === 'user' && msg.message) {
+        config.onTranscript?.(msg.message, true);
+      } else if (msg.source === 'ai' && msg.message) {
+        config.onResponse?.(msg.message);
+      }
     },
   });
   
@@ -57,7 +107,7 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
     onTranscript: config.onTranscript,
     onResponse: config.onResponse,
     onError: config.onError,
-    systemInstruction: config.systemInstruction,
+    systemInstruction: buildSystemInstruction(),
   });
   
   // Gemini Fallback hook (browser STT → Gemini text API → TTS)
@@ -70,7 +120,7 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
     onTranscript: config.onTranscript,
     onResponse: config.onResponse,
     onError: config.onError,
-    systemInstruction: config.systemInstruction,
+    systemInstruction: buildSystemInstruction(),
   });
   
   // Determine which mode to use based on settings
@@ -141,8 +191,30 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
       try {
         config.onStateChange?.('connecting');
         await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Build context for overrides (if agent supports dynamic prompts)
+        const appContext = config.getAppContext?.();
+        
         await elevenLabsConversation.startSession({
           agentId: webhook.agentId!,
+          // If you enable overrides in ElevenLabs Web UI, you can pass dynamic prompt:
+          ...(appContext && {
+            overrides: {
+              agent: {
+                prompt: {
+                  prompt: `You are Cortana, an AI home guardian and personal assistant.
+You have access to the user's tasks, goals, rules, and home automation.
+Be concise, warm, and helpful - responses will be spoken aloud.
+Keep responses under 2 sentences when possible.
+
+## Current Context
+${appContext}
+
+Use this context to provide relevant, personalized assistance.`,
+                },
+              },
+            },
+          }),
         });
         toast.success('ElevenLabs agent connected');
       } catch (error) {
@@ -159,7 +231,7 @@ export function useUnifiedVoice(config: UnifiedVoiceConfig = {}) {
         }
       }
     }
-  }, [activeMode, getVoiceProviderConfig, geminiLive, geminiFallback, elevenLabsConversation, config]);
+  }, [activeMode, getVoiceProviderConfig, geminiLive, geminiFallback, elevenLabsConversation, config, buildSystemInstruction]);
   
   // Unified stop
   const stop = useCallback(async () => {
