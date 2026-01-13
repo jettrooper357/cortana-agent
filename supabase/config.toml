@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.rules-engine]
 verify_jwt = false
+
+[functions.gemini-live-session]
+verify_jwt = false
+
+[functions.gemini-audio-chat]
+verify_jwt = false
