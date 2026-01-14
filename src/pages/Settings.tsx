@@ -18,7 +18,7 @@ import * as z from 'zod';
 
 const webhookSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  type: z.enum(['elevenlabs', 'openai', 'custom']),
+  type: z.enum(['elevenlabs', 'chatterbox', 'openai', 'custom']),
   agentId: z.string().optional(),
   voiceId: z.string().optional(), // For ElevenLabs TTS (separate from agentId)
   apiKey: z.string().optional(),
@@ -268,6 +268,12 @@ export default function Settings() {
       id: w.id,
       name: w.name,
       description: 'ElevenLabs Conversational Agent',
+      type: 'webhook'
+    })),
+    ...settings.webhooks.filter(w => w.type === 'chatterbox').map(w => ({
+      id: w.id,
+      name: w.name,
+      description: 'Chatterbox Turbo TTS (fal.ai)',
       type: 'webhook'
     })),
   ];
@@ -644,6 +650,7 @@ export default function Settings() {
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                                <SelectItem value="chatterbox">Chatterbox Turbo (fal.ai)</SelectItem>
                                 <SelectItem value="openai">OpenAI</SelectItem>
                                 <SelectItem value="custom">Custom</SelectItem>
                               </SelectContent>

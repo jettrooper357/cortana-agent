@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { Json } from '@/integrations/supabase/types';
 
-export type WebhookType = 'elevenlabs' | 'openai' | 'custom';
+export type WebhookType = 'elevenlabs' | 'chatterbox' | 'openai' | 'custom';
 export type ConversationalAIType = 'gemini' | 'chatgpt' | 'claude' | 'custom';
 
 export interface WebhookSettings {
@@ -373,10 +373,12 @@ export const useSettings = () => {
       return { type: 'conversational-ai' as const, ai: conversationalAI, ttsWebhook };
     }
     
-    // Check if it's a webhook (ElevenLabs agent, etc.)
+    // Check if it's a webhook (ElevenLabs agent, Chatterbox, etc.)
     const webhook = settings.webhooks.find(w => w.id === providerId);
     if (webhook) {
-      return { type: 'webhook' as const, webhook, ttsWebhook: webhook.type === 'elevenlabs' ? webhook : undefined };
+      // For Chatterbox, also return it as ttsWebhook
+      const isTtsProvider = webhook.type === 'elevenlabs' || webhook.type === 'chatterbox';
+      return { type: 'webhook' as const, webhook, ttsWebhook: isTtsProvider ? webhook : undefined };
     }
     
     // Default to first conversational AI (Gemini)
