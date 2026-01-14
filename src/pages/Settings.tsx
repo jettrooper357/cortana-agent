@@ -473,10 +473,15 @@ export default function Settings() {
                                     {webhook.name} (ElevenLabs)
                                   </SelectItem>
                                 ))}
+                                {settings.webhooks.filter(w => w.type === 'chatterbox').map((webhook) => (
+                                  <SelectItem key={webhook.id} value={webhook.id}>
+                                    {webhook.name} (Chatterbox Turbo)
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <FormDescription>
-                              Choose a voice for AI responses. Add ElevenLabs webhooks below for more options.
+                              Choose a voice for AI responses. Add TTS webhooks below for more options.
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
