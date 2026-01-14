@@ -705,6 +705,25 @@ export default function Settings() {
                         </>
                       )}
 
+                      {watchedWebhookType === 'chatterbox' && (
+                        <FormField
+                          control={webhookForm.control}
+                          name="apiKey"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>fal.ai API Key</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="fal_..." {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                Your fal.ai API key for Chatterbox Turbo TTS
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
                       {watchedWebhookType === 'openai' && (
                         <FormField
                           control={webhookForm.control}
