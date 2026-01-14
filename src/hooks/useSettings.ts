@@ -367,8 +367,9 @@ export const useSettings = () => {
     const conversationalAI = settings.conversationalAIs.find(ai => ai.id === providerId);
     if (conversationalAI) {
       // If the conversational AI has a TTS webhook configured, include it
+      // Support both ElevenLabs and Chatterbox TTS webhooks
       const ttsWebhook = conversationalAI.ttsWebhookId 
-        ? settings.webhooks.find(w => w.id === conversationalAI.ttsWebhookId && w.type === 'elevenlabs')
+        ? settings.webhooks.find(w => w.id === conversationalAI.ttsWebhookId && (w.type === 'elevenlabs' || w.type === 'chatterbox'))
         : undefined;
       return { type: 'conversational-ai' as const, ai: conversationalAI, ttsWebhook };
     }
