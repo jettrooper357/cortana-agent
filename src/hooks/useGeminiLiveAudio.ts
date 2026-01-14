@@ -104,7 +104,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     // Try Chatterbox TTS if webhook is configured
     if (ttsWebhook?.type === 'chatterbox') {
       try {
-        console.log('[Gemini Live] Attempting Chatterbox Turbo TTS');
+        console.log('[Gemini Live] Attempting Chatterbox Turbo TTS with API key:', ttsWebhook.apiKey ? 'present' : 'missing');
         
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatterbox-tts`,
@@ -115,7 +115,10 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
               apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
               Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
             },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ 
+              text,
+              apiKey: ttsWebhook.apiKey, // Pass the API key from webhook settings
+            }),
           }
         );
 

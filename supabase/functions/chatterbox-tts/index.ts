@@ -12,12 +12,13 @@ serve(async (req) => {
   }
 
   try {
-    const FAL_API_KEY = Deno.env.get("FAL_API_KEY");
-    if (!FAL_API_KEY) {
-      throw new Error("FAL_API_KEY is not configured");
-    }
+    const { text, apiKey, exaggeration, cfg_weight } = await req.json();
 
-    const { text, exaggeration, cfg_weight } = await req.json();
+    // Accept API key from request body or fall back to environment variable
+    const FAL_API_KEY = apiKey || Deno.env.get("FAL_API_KEY");
+    if (!FAL_API_KEY) {
+      throw new Error("FAL_API_KEY is not configured. Please add your fal.ai API key in Settings → Webhooks → Chatterbox.");
+    }
 
     if (!text || typeof text !== "string") {
       throw new Error("Text is required");
