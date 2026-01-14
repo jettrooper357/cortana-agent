@@ -84,7 +84,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     config.onStateChange?.(newState);
   }, [config]);
 
-  // Speak response - try ElevenLabs if configured, always fallback to browser TTS on any error
+  // Speak response - try ElevenLabs/Chatterbox if configured, always fallback to browser TTS on any error
   const speak = useCallback(async (text: string): Promise<void> => {
     if (!text.trim()) return;
 
@@ -95,7 +95,64 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     const providerConfig = getVoiceProviderConfig();
     const ttsWebhook = providerConfig.ttsWebhook;
     
-    console.log('[Gemini Live] TTS config:', { type: providerConfig.type, webhook: ttsWebhook?.name, voiceId: ttsWebhook?.voiceId });
+    console.log('[Gemini Live] TTS config:', { type: providerConfig.type, webhook: ttsWebhook?.name, webhookType: ttsWebhook?.type, voiceId: ttsWebhook?.voiceId });
+    
+    // Try Chatterbox TTS if webhook is configured
+    if (ttsWebhook?.type === 'chatterbox') {
+      try {
+        console.log('[Gemini Live] Attempting Chatterbox Turbo TTS');
+        
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatterbox-tts`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ text }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Chatterbox TTS failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.audioContent) {
+          // Play the audio (Chatterbox returns WAV)
+          await new Promise<void>((resolve, reject) => {
+            const contentType = data.contentType || 'audio/wav';
+            const audioUrl = `data:${contentType};base64,${data.audioContent}`;
+            const audio = new Audio(audioUrl);
+            audioRef.current = audio;
+            
+            audio.onended = () => {
+              audioRef.current = null;
+              isSpeakingRef.current = false;
+              if (isActive) {
+                updateState('listening');
+              }
+              resolve();
+            };
+            
+            audio.onerror = (e) => {
+              console.error('[Gemini Live] Chatterbox audio playback error:', e);
+              audioRef.current = null;
+              reject(new Error('Audio playback failed'));
+            };
+            
+            audio.play().catch(reject);
+          });
+          return; // Success - don't fallback to browser
+        }
+      } catch (error) {
+        console.warn('[Gemini Live] Chatterbox TTS failed, using browser TTS:', error);
+        // Fall through to browser TTS
+      }
+    }
     
     // Try ElevenLabs TTS if webhook is configured with a voiceId
     if (ttsWebhook?.type === 'elevenlabs' && ttsWebhook.voiceId) {
