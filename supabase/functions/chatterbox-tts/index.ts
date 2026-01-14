@@ -12,12 +12,16 @@ serve(async (req) => {
   }
 
   try {
-    const { text, apiKey, exaggeration, cfg_weight } = await req.json();
+    const body = await req.json();
+    const { text, apiKey, exaggeration, cfg_weight } = body;
+
+    console.log("[Chatterbox TTS] Received request with apiKey:", apiKey ? "present" : "missing");
 
     // Accept API key from request body or fall back to environment variable
     const FAL_API_KEY = apiKey || Deno.env.get("FAL_API_KEY");
     if (!FAL_API_KEY) {
-      throw new Error("FAL_API_KEY is not configured. Please add your fal.ai API key in Settings → Webhooks → Chatterbox.");
+      console.error("[Chatterbox TTS] No API key provided in request or environment");
+      throw new Error("FAL_API_KEY is not configured. Please add your fal.ai API key in Settings → Webhooks → Edit your Chatterbox webhook.");
     }
 
     if (!text || typeof text !== "string") {
