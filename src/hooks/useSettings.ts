@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { Json } from '@/integrations/supabase/types';
 
-export type WebhookType = 'elevenlabs' | 'chatterbox' | 'openai' | 'custom';
+export type WebhookType = 'elevenlabs' | 'chatterbox' | 'chatterbox-local' | 'openai' | 'custom';
 export type ConversationalAIType = 'gemini' | 'chatgpt' | 'claude' | 'custom';
 
 export interface WebhookSettings {
@@ -367,9 +367,9 @@ export const useSettings = () => {
     const conversationalAI = settings.conversationalAIs.find(ai => ai.id === providerId);
     if (conversationalAI) {
       // If the conversational AI has a TTS webhook configured, include it
-      // Support both ElevenLabs and Chatterbox TTS webhooks
+      // Support ElevenLabs, Chatterbox (fal.ai), and Chatterbox Local TTS webhooks
       const ttsWebhook = conversationalAI.ttsWebhookId 
-        ? settings.webhooks.find(w => w.id === conversationalAI.ttsWebhookId && (w.type === 'elevenlabs' || w.type === 'chatterbox'))
+        ? settings.webhooks.find(w => w.id === conversationalAI.ttsWebhookId && (w.type === 'elevenlabs' || w.type === 'chatterbox' || w.type === 'chatterbox-local'))
         : undefined;
       return { type: 'conversational-ai' as const, ai: conversationalAI, ttsWebhook };
     }
@@ -377,8 +377,8 @@ export const useSettings = () => {
     // Check if it's a webhook (ElevenLabs agent, Chatterbox, etc.)
     const webhook = settings.webhooks.find(w => w.id === providerId);
     if (webhook) {
-      // For Chatterbox, also return it as ttsWebhook
-      const isTtsProvider = webhook.type === 'elevenlabs' || webhook.type === 'chatterbox';
+      // For Chatterbox (fal.ai or local), also return it as ttsWebhook
+      const isTtsProvider = webhook.type === 'elevenlabs' || webhook.type === 'chatterbox' || webhook.type === 'chatterbox-local';
       return { type: 'webhook' as const, webhook, ttsWebhook: isTtsProvider ? webhook : undefined };
     }
     

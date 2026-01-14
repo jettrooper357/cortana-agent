@@ -18,7 +18,7 @@ import * as z from 'zod';
 
 const webhookSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  type: z.enum(['elevenlabs', 'chatterbox', 'openai', 'custom']),
+  type: z.enum(['elevenlabs', 'chatterbox', 'chatterbox-local', 'openai', 'custom']),
   agentId: z.string().optional(),
   voiceId: z.string().optional(), // For ElevenLabs TTS (separate from agentId)
   apiKey: z.string().optional(),
@@ -273,7 +273,13 @@ export default function Settings() {
     ...settings.webhooks.filter(w => w.type === 'chatterbox').map(w => ({
       id: w.id,
       name: w.name,
-      description: 'Chatterbox Turbo TTS (fal.ai)',
+      description: 'Chatterbox Turbo TTS (fal.ai Cloud)',
+      type: 'webhook'
+    })),
+    ...settings.webhooks.filter(w => w.type === 'chatterbox-local').map(w => ({
+      id: w.id,
+      name: w.name,
+      description: 'Chatterbox Turbo TTS (Local - Free)',
       type: 'webhook'
     })),
   ];
@@ -475,7 +481,12 @@ export default function Settings() {
                                 ))}
                                 {settings.webhooks.filter(w => w.type === 'chatterbox').map((webhook) => (
                                   <SelectItem key={webhook.id} value={webhook.id}>
-                                    {webhook.name} (Chatterbox Turbo)
+                                    {webhook.name} (Chatterbox Cloud)
+                                  </SelectItem>
+                                ))}
+                                {settings.webhooks.filter(w => w.type === 'chatterbox-local').map((webhook) => (
+                                  <SelectItem key={webhook.id} value={webhook.id}>
+                                    {webhook.name} (Chatterbox Local - Free)
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -655,7 +666,8 @@ export default function Settings() {
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                                <SelectItem value="chatterbox">Chatterbox Turbo (fal.ai)</SelectItem>
+                                <SelectItem value="chatterbox">Chatterbox Turbo (fal.ai - Cloud)</SelectItem>
+                                <SelectItem value="chatterbox-local">Chatterbox Turbo (Local - Free)</SelectItem>
                                 <SelectItem value="openai">OpenAI</SelectItem>
                                 <SelectItem value="custom">Custom</SelectItem>
                               </SelectContent>
@@ -716,7 +728,26 @@ export default function Settings() {
                                 <Input type="password" placeholder="fal_..." {...field} />
                               </FormControl>
                               <FormDescription>
-                                Your fal.ai API key for Chatterbox Turbo TTS
+                                Your fal.ai API key for Chatterbox Turbo TTS (cloud)
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {watchedWebhookType === 'chatterbox-local' && (
+                        <FormField
+                          control={webhookForm.control}
+                          name="webhookUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Local Server URL</FormLabel>
+                              <FormControl>
+                                <Input placeholder="http://localhost:8765" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                URL of your local Chatterbox server. Run 'python demo_app.py' to start it. Completely free, no API key needed!
                               </FormDescription>
                               <FormMessage />
                             </FormItem>

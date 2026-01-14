@@ -101,10 +101,66 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     
     console.log('[Gemini Live] TTS config:', { type: providerConfig.type, webhook: ttsWebhook?.name, webhookType: ttsWebhook?.type, voiceId: ttsWebhook?.voiceId });
     
-    // Try Chatterbox TTS if webhook is configured
+    // Try Local Chatterbox TTS if configured (FREE - no API key needed!)
+    if (ttsWebhook?.type === 'chatterbox-local' && ttsWebhook.webhookUrl) {
+      try {
+        console.log('[Gemini Live] Attempting Local Chatterbox TTS at:', ttsWebhook.webhookUrl);
+        
+        // Call local Chatterbox server directly
+        const response = await fetch(`${ttsWebhook.webhookUrl}/api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            text,
+            exaggeration: 0.5,
+            cfg_weight: 0.5,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Local Chatterbox failed: ${response.status}`);
+        }
+
+        // Local Chatterbox returns audio directly as binary
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        await new Promise<void>((resolve, reject) => {
+          const audio = new Audio(audioUrl);
+          audioRef.current = audio;
+          
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            audioRef.current = null;
+            isSpeakingRef.current = false;
+            if (isActive) {
+              updateState('listening');
+            }
+            resolve();
+          };
+          
+          audio.onerror = (e) => {
+            console.error('[Gemini Live] Local Chatterbox audio playback error:', e);
+            URL.revokeObjectURL(audioUrl);
+            audioRef.current = null;
+            reject(new Error('Audio playback failed'));
+          };
+          
+          audio.play().catch(reject);
+        });
+        return; // Success - don't fallback to browser
+      } catch (error) {
+        console.warn('[Gemini Live] Local Chatterbox TTS failed, using browser TTS:', error);
+        // Fall through to browser TTS
+      }
+    }
+    
+    // Try Chatterbox Cloud TTS if webhook is configured (fal.ai)
     if (ttsWebhook?.type === 'chatterbox') {
       try {
-        console.log('[Gemini Live] Attempting Chatterbox Turbo TTS with API key:', ttsWebhook.apiKey ? 'present' : 'missing');
+        console.log('[Gemini Live] Attempting Chatterbox Cloud TTS with API key:', ttsWebhook.apiKey ? 'present' : 'missing');
         
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatterbox-tts`,
@@ -117,19 +173,18 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
             },
             body: JSON.stringify({ 
               text,
-              apiKey: ttsWebhook.apiKey, // Pass the API key from webhook settings
+              apiKey: ttsWebhook.apiKey,
             }),
           }
         );
 
         if (!response.ok) {
-          throw new Error(`Chatterbox TTS failed: ${response.status}`);
+          throw new Error(`Chatterbox Cloud TTS failed: ${response.status}`);
         }
 
         const data = await response.json();
         
         if (data.audioContent) {
-          // Play the audio (Chatterbox returns WAV)
           await new Promise<void>((resolve, reject) => {
             const contentType = data.contentType || 'audio/wav';
             const audioUrl = `data:${contentType};base64,${data.audioContent}`;
@@ -146,7 +201,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
             };
             
             audio.onerror = (e) => {
-              console.error('[Gemini Live] Chatterbox audio playback error:', e);
+              console.error('[Gemini Live] Chatterbox Cloud audio playback error:', e);
               audioRef.current = null;
               reject(new Error('Audio playback failed'));
             };
@@ -156,7 +211,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
           return; // Success - don't fallback to browser
         }
       } catch (error) {
-        console.warn('[Gemini Live] Chatterbox TTS failed, using browser TTS:', error);
+        console.warn('[Gemini Live] Chatterbox Cloud TTS failed, using browser TTS:', error);
         // Fall through to browser TTS
       }
     }
