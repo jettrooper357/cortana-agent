@@ -18,6 +18,10 @@ interface GeminiLiveConfig {
   onError?: (error: string) => void;
   systemInstruction?: string;
   voice?: string;
+  // AI provider settings
+  aiProvider?: 'gemini' | 'chatgpt' | 'claude';
+  aiApiKey?: string;
+  aiModel?: string;
 }
 
 interface SpeechRecognitionEvent {
@@ -270,7 +274,7 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
     });
   }, [isActive, updateState, getVoiceProviderConfig]);
 
-  // Process transcript with Gemini
+  // Process transcript with AI (supports multiple providers)
   const processTranscript = useCallback(async (transcript: string) => {
     if (!transcript.trim() || isProcessingRef.current || isSpeakingRef.current) {
       return;
@@ -294,8 +298,14 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
       
       setConversationHistory(prev => [...prev, userMessage]);
 
-      // Call the Gemini audio chat function
-      const { data, error: invokeError } = await supabase.functions.invoke('gemini-audio-chat', {
+      // Determine which AI provider to use
+      const provider = config.aiProvider || 'gemini';
+      const functionName = provider === 'gemini' ? 'gemini-audio-chat' : 'ai-chat';
+      
+      console.log(`[ConversationalAI] Using provider: ${provider}`);
+
+      // Call the appropriate AI chat function
+      const { data, error: invokeError } = await supabase.functions.invoke(functionName, {
         body: {
           transcript: transcript.trim(),
           conversationHistory: conversationHistory.slice(-10).map(m => ({
@@ -303,6 +313,9 @@ export function useGeminiLiveAudio(config: GeminiLiveConfig = {}) {
             content: m.content,
           })),
           systemInstruction: config.systemInstruction,
+          provider: provider,
+          apiKey: config.aiApiKey,
+          model: config.aiModel,
         },
       });
 

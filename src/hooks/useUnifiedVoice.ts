@@ -133,7 +133,15 @@ Use this context to provide relevant, personalized assistance. Reference specifi
     systemInstruction: buildSystemInstruction(),
   });
   
-  // Gemini Fallback hook (browser STT → Gemini text API → TTS)
+  // Gemini Fallback / Generic conversational AI hook (browser STT → AI API → TTS)
+  // This hook now supports all AI providers, not just Gemini
+  const [currentAIConfig, setCurrentAIConfig] = useState<{
+    provider: 'gemini' | 'chatgpt' | 'claude';
+    apiKey?: string;
+    model?: string;
+    name: string;
+  }>({ provider: 'gemini', name: 'Gemini AI' });
+  
   const geminiFallback = useGeminiLiveAudio({
     onStateChange: (state) => {
       if (activeMode === 'gemini-fallback') {
@@ -144,6 +152,9 @@ Use this context to provide relevant, personalized assistance. Reference specifi
     onResponse: config.onResponse,
     onError: config.onError,
     systemInstruction: buildSystemInstruction(),
+    aiProvider: currentAIConfig.provider,
+    aiApiKey: currentAIConfig.apiKey,
+    aiModel: currentAIConfig.model,
   });
   
   // Determine which mode to use based on settings
@@ -154,10 +165,20 @@ Use this context to provide relevant, personalized assistance. Reference specifi
     
     if (providerConfig.type === 'browser') {
       setActiveMode('browser');
+      setCurrentAIConfig({ provider: 'gemini', name: 'Browser' });
     } else if (providerConfig.type === 'conversational-ai') {
-      // Try Gemini Live first if API key exists, otherwise use fallback
-      // Both modes will work - fallback uses free Lovable AI
-      if (providerConfig.ai?.apiKey) {
+      const ai = providerConfig.ai;
+      // Set the AI provider based on the selected conversational AI
+      const aiType = ai?.type || 'gemini';
+      setCurrentAIConfig({
+        provider: aiType as 'gemini' | 'chatgpt' | 'claude',
+        apiKey: ai?.apiKey,
+        model: ai?.model,
+        name: ai?.name || 'AI',
+      });
+      
+      // Try Gemini Live first if it's Gemini with API key, otherwise use fallback
+      if (aiType === 'gemini' && ai?.apiKey) {
         setActiveMode('gemini-live');
       } else {
         setActiveMode('gemini-fallback');
@@ -169,6 +190,8 @@ Use this context to provide relevant, personalized assistance. Reference specifi
         setActiveMode('elevenlabs-agent');
       } else {
         setActiveMode('gemini-fallback');
+        // Default to Gemini for TTS-only webhooks
+        setCurrentAIConfig({ provider: 'gemini', name: 'Gemini AI' });
       }
     }
   }, [settings.voice.provider, getVoiceProviderConfig]);
@@ -290,10 +313,10 @@ Use this context to provide relevant, personalized assistance. Reference specifi
   // Get provider name for display
   const getProviderName = useCallback(() => {
     if (activeMode === 'gemini-live') return 'Gemini Live';
-    if (activeMode === 'gemini-fallback') return 'Gemini AI';
+    if (activeMode === 'gemini-fallback') return currentAIConfig.name;
     if (activeMode === 'elevenlabs-agent') return 'ElevenLabs Agent';
     return 'Browser';
-  }, [activeMode]);
+  }, [activeMode, currentAIConfig.name]);
   
   // Get current transcript
   const getCurrentTranscript = useCallback(() => {
